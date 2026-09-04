@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TechnoSetAnalysis, TransitionItem, PeakMoment, BoothTheme, AiAssessment } from './types';
+import { TechnoSetAnalysis, TransitionItem, PeakMoment, BoothTheme, AiAssessment, SetSegment } from './types';
 import { DEMO_SETS } from './data/demoSets';
 import { getLocalSets, saveLocalSet, deleteLocalSet, syncSetToCloud } from './utils/storage';
 import { exportSetReportAsPdf, formatTimeSeconds } from './utils/pdfExport';
 import { TechnoPreviewAudioEngine } from './utils/audioAnalyzer';
+import { computeAutoTaggedSegments } from './utils/segmentAutoTagger';
 
 import { HeaderBar } from './components/HeaderBar';
 import { AudioDeck } from './components/AudioDeck';
 import { BpmHarmonicChart } from './components/BpmHarmonicChart';
+import { SegmentTaggerCard } from './components/SegmentTaggerCard';
+import { TargetProfileComparator } from './components/TargetProfileComparator';
+import { HarmonicEnergyConflictVisualizer } from './components/HarmonicEnergyConflictVisualizer';
+import { EqMudAdvisorCard } from './components/EqMudAdvisorCard';
 import { TransitionInspector } from './components/TransitionInspector';
 import { PeakMomentsRadar } from './components/PeakMomentsRadar';
 import { TechnicalStatsCard } from './components/TechnicalStatsCard';
@@ -35,8 +40,17 @@ export default function App() {
 
     getLocalSets().then((loaded) => {
       if (loaded && loaded.length > 0) {
-        setAllSets(loaded);
-        setCurrentSet(loaded[0]);
+        const enriched = loaded.map((s) => {
+          if (!s.segments || s.segments.length === 0) {
+            return {
+              ...s,
+              segments: computeAutoTaggedSegments(s.duration || 3600, s.energyPoints || [])
+            };
+          }
+          return s;
+        });
+        setAllSets(enriched);
+        setCurrentSet(enriched[0]);
       }
     });
 
@@ -210,6 +224,17 @@ export default function App() {
     saveLocalSet(updatedSet);
   };
 
+  const handleUpdateSegments = (updatedSegments: SetSegment[]) => {
+    const updatedSet: TechnoSetAnalysis = {
+      ...currentSet,
+      segments: updatedSegments,
+      updatedAt: new Date().toISOString()
+    };
+    setCurrentSet(updatedSet);
+    setAllSets((prev) => prev.map((s) => (s.id === updatedSet.id ? updatedSet : s)));
+    saveLocalSet(updatedSet);
+  };
+
   const handleQuickSync = async () => {
     setIsSyncing(true);
     const res = await syncSetToCloud(currentSet);
@@ -225,7 +250,7 @@ export default function App() {
       ? 'bg-[#0d0404] text-red-100 selection:bg-red-900 selection:text-white'
       : theme === 'cyan-laser'
       ? 'bg-[#040a0f] text-cyan-100 selection:bg-cyan-900 selection:text-white'
-      : 'bg-zinc-950 text-zinc-100 selection:bg-emerald-900 selection:text-white';
+      : 'bg-[#0A0A0B] text-slate-300 selection:bg-emerald-950 selection:text-white';
 
   return (
     <div className={`min-h-screen ${themeClass} flex flex-col font-sans transition-colors duration-300`}>
@@ -244,7 +269,7 @@ export default function App() {
       />
 
       {/* Main Workspace Layout */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 flex flex-col gap-3">
         {/* 1. Main DJ Audio Deck & Scrubber */}
         <AudioDeck
           currentSet={currentSet}
@@ -263,11 +288,41 @@ export default function App() {
           onSeek={handleSeek}
         />
 
-        {/* 3. Technical Audio & Mastering Metrics */}
+        {/* 3. Auto-Tagging & Set-Segmentierung */}
+        <SegmentTaggerCard
+          currentSet={currentSet}
+          currentTime={currentTime}
+          onSeek={handleSeek}
+          onUpdateSegments={handleUpdateSegments}
+        />
+
+        {/* 4. Target Energy Profiles & Performance Feedback */}
+        <TargetProfileComparator
+          currentSet={currentSet}
+          currentTime={currentTime}
+          onSeek={handleSeek}
+        />
+
+        {/* 5. Harmonic Progression (Camelot Wheel) vs. Energy Trend Conflict Visualizer */}
+        <HarmonicEnergyConflictVisualizer
+          currentSet={currentSet}
+          currentTime={currentTime}
+          onSeek={handleSeek}
+        />
+
+        {/* 6. Harmonic EQ Cut & Mud Reduction Advisor */}
+        <EqMudAdvisorCard
+          currentSet={currentSet}
+          currentTime={currentTime}
+          onSeek={handleSeek}
+          audioEngine={audioEngineRef.current}
+        />
+
+        {/* 7. Technical Audio & Mastering Metrics */}
         <TechnicalStatsCard metrics={currentSet.technicalMetrics} />
 
         {/* 4. Dual Grid: Transition Quality Inspector & Peak Moments Radar */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <TransitionInspector
             currentSet={currentSet}
             currentTime={currentTime}
@@ -293,8 +348,8 @@ export default function App() {
       </main>
 
       {/* Footer info for DJ booth */}
-      <footer className="border-t border-zinc-900 bg-zinc-950/80 py-3 px-4 text-center font-mono text-xs text-zinc-500">
-        TechnoSet Analyzer Pro • 100% Offline Web Audio Engine • Camelot Harmonik & Onset-Detektion • Bühnen-Modus
+      <footer className="border-t border-white/5 bg-[#0A0A0B] py-2.5 px-4 text-center font-mono text-[10px] text-slate-600">
+        TechnoSet Analyzer Pro • 100% Offline Web Audio Engine • Camelot Harmonik & Onset-Detektion • High-Density Stage Mode
       </footer>
 
       {/* Modals */}

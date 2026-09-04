@@ -9,10 +9,14 @@ import {
   Plus,
   Sliders,
   Sparkles,
-  Save
+  Save,
+  ChevronDown,
+  ChevronUp,
+  Volume2
 } from 'lucide-react';
 import { TransitionItem, TechnoSetAnalysis } from '../types';
 import { formatTimeSeconds } from '../utils/pdfExport';
+import { generateTransitionEqAdvice } from '../utils/eqFrequencyAdvisor';
 
 interface TransitionInspectorProps {
   currentSet: TechnoSetAnalysis;
@@ -34,6 +38,7 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'clash' | 'perfect'>('all');
+  const [expandedEqId, setExpandedEqId] = useState<string | null>(null);
 
   const transitions = currentSet.transitions;
 
@@ -64,47 +69,47 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
   return (
     <div
       id="transition-quality-inspector"
-      className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 shadow-xl flex flex-col gap-4"
+      className="bg-[#121214] border border-white/5 p-3 sm:p-4 rounded flex flex-col gap-2.5"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-          <h3 className="font-mono text-sm font-bold text-zinc-100 uppercase tracking-wider">
-            ÜBERGANGSQUALITÄT & TRANSITION RADAR
+          <div className="w-2 h-2 rounded-full bg-amber-500" />
+          <h3 className="text-[10px] font-mono font-bold text-amber-500 uppercase tracking-widest">
+            TRANSITION QUALITY LOG
           </h3>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800/80 text-cyan-300 font-mono font-bold">
-            Ø Score: {avgQuality}%
+          <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 border border-white/10 text-amber-400 font-mono font-bold">
+            Ø {avgQuality}%
           </span>
         </div>
 
         {/* Filter & Quick Add Buttons */}
         <div className="flex items-center gap-2">
           {/* Quick Filter */}
-          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-md p-0.5 text-xs font-mono">
+          <div className="flex items-center bg-white/5 border border-white/10 rounded p-0.5 text-[10px] font-mono">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-2 py-1 rounded transition-colors cursor-pointer ${
-                filterType === 'all' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                filterType === 'all' ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              Alle ({transitions.length})
+              All ({transitions.length})
             </button>
             <button
               onClick={() => setFilterType('perfect')}
-              className={`px-2 py-1 rounded transition-colors cursor-pointer ${
-                filterType === 'perfect' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40' : 'text-zinc-500 hover:text-zinc-300'
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                filterType === 'perfect' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              90%+ Nahtlos
+              90%+
             </button>
             <button
               onClick={() => setFilterType('clash')}
-              className={`px-2 py-1 rounded transition-colors cursor-pointer ${
-                filterType === 'clash' ? 'bg-amber-950 text-amber-300 border border-amber-800/40' : 'text-zinc-500 hover:text-zinc-300'
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                filterType === 'clash' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              Clash-Risiko
+              Clash
             </button>
           </div>
 
@@ -112,19 +117,19 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
           <button
             id="btn-add-transition-marker"
             onClick={onAddTransitionAtCurrentTime}
-            className="flex items-center gap-1 text-xs font-mono px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-all cursor-pointer"
+            className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all cursor-pointer uppercase"
             title={`Neuen Übergangs-Marker bei aktuellem Zeitpunkt (${formatTimeSeconds(currentTime)}) einfügen`}
           >
-            <Plus className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Marker bei {formatTimeSeconds(currentTime)}</span>
+            <Plus className="w-3 h-3 text-amber-400" />
+            <span className="hidden sm:inline">Marker ({formatTimeSeconds(currentTime)})</span>
           </button>
         </div>
       </div>
 
       {/* Transition Scorecards List */}
-      <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
         {filteredTransitions.length === 0 ? (
-          <div className="text-center py-8 text-xs font-mono text-zinc-500">
+          <div className="text-center py-6 text-[10px] font-mono text-slate-500">
             Keine Übergänge entsprechen dem ausgewählten Filter.
           </div>
         ) : (
@@ -132,119 +137,180 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
             const isEditing = editingId === t.id;
             const isNearPlayhead = Math.abs(t.timestamp - currentTime) < 30;
 
-            const scoreColor =
-              t.qualityScore >= 92
-                ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/40'
-                : t.qualityScore >= 84
-                ? 'text-yellow-400 bg-yellow-950/40 border-yellow-500/40'
-                : 'text-amber-400 bg-amber-950/40 border-amber-500/40';
+            const borderAccent =
+              t.qualityScore >= 90
+                ? 'border-l-2 border-emerald-500'
+                : t.eqClashRisk === 'high' || t.qualityScore < 80
+                ? 'border-l-2 border-pink-500'
+                : 'border-l-2 border-amber-500';
+
+            const scoreText =
+              t.qualityScore >= 90
+                ? 'text-emerald-400'
+                : t.qualityScore >= 80
+                ? 'text-amber-400'
+                : 'text-pink-400';
 
             return (
               <div
                 key={t.id}
-                className={`bg-zinc-900/80 border rounded-lg p-3 transition-all ${
-                  isNearPlayhead
-                    ? 'border-cyan-500/80 ring-1 ring-cyan-500/50 shadow-md shadow-cyan-500/10'
-                    : 'border-zinc-800 hover:border-zinc-700'
+                className={`pl-3 py-1.5 pr-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-r transition-all border border-white/5 ${borderAccent} ${
+                  isNearPlayhead ? 'ring-1 ring-white/20' : ''
                 }`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1">
                   {/* Transition Meta & Time */}
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-mono text-slate-500">
                       #{idx + 1}
                     </span>
                     <button
                       onClick={() => onJumpToTransition(t)}
-                      className="font-mono text-sm font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1 cursor-pointer"
+                      className="font-mono text-xs font-bold text-white hover:text-emerald-400 flex items-center gap-1 cursor-pointer"
                       title="15s vor dem Übergang vorhören"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current text-cyan-400" />
+                      <Play className="w-3 h-3 fill-current text-amber-400" />
                       {formatTimeSeconds(t.timestamp)}
                     </button>
-                    <span className="text-[11px] font-mono text-zinc-500">
+                    <span className="text-[10px] font-mono text-slate-500">
                       ({t.duration}s Mix)
                     </span>
                   </div>
 
                   {/* Badges & Scores */}
-                  <div className="flex items-center gap-2 font-mono text-xs">
+                  <div className="flex items-center gap-2 font-mono text-[10px]">
                     {/* Quality Score */}
                     <div
-                      className={`px-2 py-0.5 rounded border font-bold ${scoreColor}`}
+                      className={`font-bold ${scoreText}`}
                       title="Gesamte Übergangsqualität"
                     >
-                      {t.qualityScore}% Qualität
+                      {t.qualityScore}% SCORE
                     </div>
 
                     {/* Low-End Clash Badge */}
                     <div
-                      className={`px-2 py-0.5 rounded border text-[11px] ${
+                      className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
                         t.eqClashRisk === 'low'
-                          ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-400'
+                          ? 'bg-emerald-500/20 text-emerald-400'
                           : t.eqClashRisk === 'medium'
-                          ? 'bg-amber-950/30 border-amber-800/40 text-amber-400'
-                          : 'bg-red-950/30 border-red-800/40 text-red-400'
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-pink-500/20 text-pink-400'
                       }`}
                       title="Kick / Subbass Kollisionsrisiko im Blend"
                     >
-                      Bass: {t.eqClashRisk.toUpperCase()}
-                    </div>
-
-                    {/* Phasing Score */}
-                    <div
-                      className="text-[11px] text-zinc-400 hidden md:block"
-                      title="Phasen-Kohärenz der Beat-Transienten"
-                    >
-                      Phase: <strong className="text-zinc-200">{t.phaseScore}%</strong>
+                      BASS: {t.eqClashRisk.toUpperCase()}
                     </div>
 
                     {/* Harmonies */}
-                    <div className="text-[11px] text-purple-300 bg-purple-950/40 border border-purple-800/40 px-1.5 py-0.5 rounded font-bold">
+                    <div className="text-[9px] text-purple-300 bg-purple-900/30 border border-purple-500/30 px-1 py-0.2 rounded font-bold">
                       {t.fromKey} → {t.toKey}
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 ml-2">
+                    <div className="flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => setExpandedEqId(expandedEqId === t.id ? null : t.id)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                          expandedEqId === t.id
+                            ? 'bg-emerald-500 text-black'
+                            : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30'
+                        }`}
+                        title="EQ-Cuts & Matsch-Entzerrung anzeigen"
+                      >
+                        <Sliders className="w-2.5 h-2.5" />
+                        <span>EQ-Cuts</span>
+                        {expandedEqId === t.id ? (
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        ) : (
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        )}
+                      </button>
                       <button
                         onClick={() => startEdit(t)}
-                        className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                        className="p-1 rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                         title="Notiz bearbeiten"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => onDeleteTransition(t.id)}
-                        className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer"
+                        className="p-1 rounded text-slate-600 hover:text-pink-400 hover:bg-white/10 transition-colors cursor-pointer"
                         title="Marker entfernen"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
                 </div>
 
+                {/* Inline Expandable EQ Mud Cuts Drawer */}
+                {expandedEqId === t.id && (() => {
+                  const advice = generateTransitionEqAdvice(t);
+                  return (
+                    <div className="mt-2 mb-1.5 p-2.5 rounded bg-black/70 border border-emerald-500/30 flex flex-col gap-2 font-mono text-[9px]">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <Sliders className="w-3 h-3" />
+                          EMPFOHLENE EQ-SCHNITTE GEGEN MATSCH (RISIKO: {advice.mudRiskIndex}%)
+                        </span>
+                        <span className="text-pink-400 font-bold">
+                          Fokus-Zone: {advice.primaryMudZoneHz}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {advice.recommendedCuts.map((cut) => (
+                          <div
+                            key={cut.id}
+                            className="bg-white/5 p-1.5 rounded border border-white/5 flex flex-col gap-0.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-white font-bold">{cut.actionSummary}</span>
+                              <span
+                                className={`text-[8px] px-1 py-0.2 rounded uppercase ${
+                                  cut.priority === 'critical'
+                                    ? 'bg-rose-500/20 text-rose-300'
+                                    : 'bg-amber-500/20 text-amber-300'
+                                }`}
+                              >
+                                {cut.priority}
+                              </span>
+                            </div>
+                            <div className="text-[8px] text-slate-400">
+                              Hardware (Xone:96): {cut.hardwareKnobSettings.xone96.knob} @ {cut.hardwareKnobSettings.xone96.position}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="text-[8.5px] text-slate-300 bg-emerald-950/20 border border-emerald-500/20 p-1.5 rounded">
+                        <strong className="text-emerald-400">Kick-Swap Regel: </strong>
+                        <span>{advice.mixChoreography[2]?.action || 'Subbass niemals gleichzeitig bei 100% überlappen lassen.'}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Transition Notes & Editable Area */}
                 {isEditing ? (
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-1 flex gap-2">
                     <input
                       type="text"
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
-                      className="flex-1 bg-zinc-950 border border-zinc-700 rounded px-2.5 py-1 text-xs font-mono text-zinc-100 focus:outline-none focus:border-cyan-500"
-                      placeholder="Eigene DJ-Notiz zum Übergang eingeben..."
+                      className="flex-1 bg-black border border-white/20 rounded px-2 py-0.5 text-[11px] font-mono text-white focus:outline-none focus:border-emerald-500"
+                      placeholder="Eigene DJ-Notiz zum Übergang..."
                       autoFocus
                     />
                     <button
                       onClick={() => saveEdit(t)}
-                      className="flex items-center gap-1 text-xs font-mono px-3 py-1 bg-emerald-500 text-zinc-950 font-bold rounded hover:bg-emerald-400 cursor-pointer"
+                      className="flex items-center gap-1 text-[10px] font-mono px-2.5 py-0.5 bg-emerald-500 text-black font-bold rounded hover:bg-emerald-400 cursor-pointer uppercase"
                     >
-                      <Save className="w-3 h-3" /> Speichern
+                      <Save className="w-3 h-3" /> Save
                     </button>
                   </div>
                 ) : (
-                  <p className="text-xs font-mono text-zinc-400 bg-zinc-950/60 p-2 rounded border border-zinc-800/50">
-                    <span className="text-zinc-500 mr-1">Anmerkung:</span>
+                  <p className="text-[11px] font-mono text-slate-300">
                     {t.notes}
                   </p>
                 )}

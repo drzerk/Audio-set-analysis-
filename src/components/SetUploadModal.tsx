@@ -69,58 +69,58 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     >
       <div
         id="upload-set-modal-window"
-        className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative flex flex-col gap-5 max-h-[90vh] overflow-y-auto"
+        className="bg-[#121214] border border-white/10 rounded-lg w-full max-w-2xl p-5 shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
       >
         {/* Close button */}
         <button
           onClick={onClose}
           disabled={isProcessing}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-100 p-1.5 rounded-lg hover:bg-zinc-900 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {/* Modal Header */}
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Disc3 className="w-5 h-5 text-emerald-400 animate-spin-slow" />
-            <h3 className="font-mono text-lg font-bold text-zinc-100">
+            <Disc3 className="w-4 h-4 text-emerald-400 animate-spin-slow" />
+            <h3 className="font-mono text-sm sm:text-base font-bold text-white uppercase tracking-wider">
               Techno-Set reinladen & analysieren
             </h3>
           </div>
-          <p className="font-mono text-xs text-zinc-400">
+          <p className="font-mono text-[10px] text-slate-400">
             100% Offline-Analyse via Browser Web Audio API. Keine Audio-Uploads an externe Server erforderlich.
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-950/40 border border-red-800/60 p-3 rounded-lg flex items-center gap-2 text-xs font-mono text-red-300">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+          <div className="bg-pink-950/40 border border-pink-800/60 p-2.5 rounded flex items-center gap-2 text-[10px] font-mono text-pink-300">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {/* Drag & Drop Box */}
         {isProcessing ? (
-          <div className="bg-zinc-900/80 border border-emerald-500/40 rounded-xl p-8 flex flex-col items-center justify-center gap-4 text-center">
-            <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
+          <div className="bg-white/[0.02] border border-emerald-500/40 rounded p-8 flex flex-col items-center justify-center gap-3 text-center">
+            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
             <div>
-              <h4 className="font-mono text-sm font-bold text-zinc-100 mb-1">
+              <h4 className="font-mono text-xs font-bold text-white mb-1 uppercase tracking-wider">
                 {progressText}
               </h4>
-              <p className="font-mono text-xs text-zinc-400">
+              <p className="font-mono text-[10px] text-slate-400">
                 Analysiere Onsets, Frequenzspektren, Phasen & Übergänge...
               </p>
             </div>
 
             {/* Progress bar */}
-            <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-full h-2.5 overflow-hidden">
+            <div className="w-full max-w-md bg-black border border-white/10 rounded-full h-2 overflow-hidden">
               <div
                 style={{ width: `${progressPercent}%` }}
-                className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-[0_0_10px_#10b981]"
+                className="bg-emerald-400 h-full rounded-full transition-all duration-300"
               />
             </div>
-            <span className="font-mono text-xs text-emerald-400 font-bold">
+            <span className="font-mono text-[10px] text-emerald-400 font-bold">
               {progressPercent}%
             </span>
           </div>
@@ -133,10 +133,10 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 text-center cursor-pointer transition-all ${
+            className={`border border-dashed rounded p-6 flex flex-col items-center justify-center gap-2.5 text-center cursor-pointer transition-all ${
               isDragging
-                ? 'border-emerald-400 bg-emerald-950/20'
-                : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600 hover:bg-zinc-900/80'
+                ? 'border-emerald-400 bg-emerald-500/10'
+                : 'border-white/20 bg-white/[0.02] hover:border-white/40 hover:bg-white/[0.04]'
             }`}
           >
             <input
@@ -150,28 +150,28 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
               }}
               className="hidden"
             />
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <UploadCloud className="w-6 h-6" />
+            <div className="w-10 h-10 rounded bg-white/5 border border-white/10 flex items-center justify-center text-emerald-400">
+              <UploadCloud className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-mono text-sm font-bold text-zinc-200">
+              <p className="font-mono text-xs font-bold text-white uppercase tracking-wider">
                 Audiodatei hier ablegen oder durchsuchen
               </p>
-              <p className="font-mono text-xs text-zinc-500 mt-1">
-                Unterstützt WAV, MP3, FLAC, AAC, AIFF bis zu 2 Stunden Sets
+              <p className="font-mono text-[10px] text-slate-500 mt-0.5">
+                WAV, MP3, FLAC, AAC, AIFF bis zu 2 Stunden Sets
               </p>
             </div>
           </div>
         )}
 
         {/* Demo Sets Section for Instant Testing */}
-        <div className="border-t border-zinc-800/80 pt-4">
-          <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-400 mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Oder sofort ein vorgefertigtes Techno-Set testen:</span>
+        <div className="border-t border-white/5 pt-3">
+          <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-400 mb-2 uppercase tracking-wider">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Vorgefertigte Techno-Sets zum Testen:</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {DEMO_SETS.map((demo) => (
               <button
                 key={demo.id}
@@ -180,12 +180,12 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
                   onClose();
                 }}
                 disabled={isProcessing}
-                className="bg-zinc-900/80 border border-zinc-800 hover:border-emerald-500/60 p-3 rounded-lg text-left transition-all group cursor-pointer"
+                className="bg-white/5 border border-white/5 hover:border-emerald-500/50 p-2.5 rounded text-left transition-all group cursor-pointer"
               >
-                <div className="font-mono text-xs font-bold text-zinc-200 group-hover:text-emerald-400 truncate mb-1">
+                <div className="font-mono text-[11px] font-bold text-white group-hover:text-emerald-400 truncate mb-0.5">
                   {demo.name}
                 </div>
-                <div className="flex items-center justify-between font-mono text-[10px] text-zinc-400">
+                <div className="flex items-center justify-between font-mono text-[9px] text-slate-400">
                   <span>{demo.bpmAverage} BPM</span>
                   <span className="text-purple-400">{demo.dominantKey}</span>
                 </div>

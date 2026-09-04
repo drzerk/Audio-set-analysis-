@@ -57,20 +57,20 @@ export const AiAssessmentCard: React.FC<AiAssessmentCardProps> = ({
 
   if (!assessment) {
     return (
-      <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 shadow-xl text-center">
-        <Sparkles className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-        <h3 className="font-mono text-base font-bold text-zinc-100 mb-1">
+      <div className="bg-[#121214] border border-white/5 rounded p-6 text-center">
+        <Sparkles className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+        <h3 className="font-mono text-sm font-bold text-white mb-1 uppercase tracking-wider">
           Noch keine KI-Gesamtbewertung vorhanden
         </h3>
-        <p className="text-xs font-mono text-zinc-400 max-w-md mx-auto mb-4">
+        <p className="text-[10px] font-mono text-slate-400 max-w-md mx-auto mb-4">
           Generiere eine tiefgehende audio-technische und energetische Einschätzung deines Techno-Sets via Gemini AI.
         </p>
         <button
           onClick={handleRunAiAnalysis}
           disabled={isLoading}
-          className="px-4 py-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold text-xs flex items-center gap-2 mx-auto cursor-pointer"
+          className="px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-mono font-bold text-[10px] flex items-center gap-2 mx-auto cursor-pointer uppercase tracking-wider"
         >
-          {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
           <span>Jetzt KI-Analyse starten</span>
         </button>
       </div>
@@ -80,14 +80,14 @@ export const AiAssessmentCard: React.FC<AiAssessmentCardProps> = ({
   return (
     <div
       id="ai-master-assessment-card"
-      className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 sm:p-5 shadow-xl flex flex-col gap-4"
+      className="bg-[#121214] border border-white/5 p-3 sm:p-4 rounded flex flex-col gap-2.5"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-emerald-400" />
-          <h3 className="font-mono text-sm font-bold text-zinc-100 uppercase tracking-wider">
-            MASTER-EINSCHÄTZUNG & CROWD-PSYCHOLOGIE
+          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+          <h3 className="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-widest">
+            AI MASTER-EINSCHÄTZUNG & CROWD-PSYCHOLOGIE
           </h3>
         </div>
 
@@ -95,94 +95,94 @@ export const AiAssessmentCard: React.FC<AiAssessmentCardProps> = ({
           id="btn-refresh-ai-assessment"
           onClick={handleRunAiAnalysis}
           disabled={isLoading}
-          className="flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all cursor-pointer uppercase"
           title="Erneute Analyse mit Gemini AI anstoßen"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>{isLoading ? 'Analysiere Set...' : 'Neu analysieren'}</span>
+          <RefreshCw className={`w-3 h-3 text-purple-400 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>{isLoading ? 'Analysiere...' : 'Neu analysieren'}</span>
         </button>
       </div>
 
       {errorMsg && (
-        <div className="bg-red-950/40 border border-red-800/60 p-2.5 rounded text-xs font-mono text-red-300">
+        <div className="bg-pink-950/40 border border-pink-800/60 p-2 rounded text-[10px] font-mono text-pink-300">
           {errorMsg}
         </div>
       )}
 
       {/* Main Headline & Scores */}
-      <div className="bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 p-4 rounded-lg border border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white/5 p-3 rounded border border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div>
-          <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+          <span className="text-[9px] font-mono font-bold text-purple-400 uppercase tracking-widest">
             {assessment.vibeProfile}
           </span>
-          <h4 className="font-mono text-base sm:text-lg font-bold text-zinc-100 mt-0.5">
+          <h4 className="font-mono text-sm sm:text-base font-bold text-white mt-0.5">
             "{assessment.headline}"
           </h4>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="bg-zinc-950/80 border border-zinc-800 p-2.5 rounded-lg text-center font-mono">
-            <div className="text-[10px] text-zinc-500 uppercase">Technik-Score</div>
-            <div className="text-xl font-black text-emerald-400">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="bg-black/70 border border-white/10 p-2 rounded text-center font-mono min-w-[75px]">
+            <div className="text-[9px] text-slate-500 uppercase">Technik</div>
+            <div className="text-lg font-bold text-emerald-400 font-mono">
               {assessment.technicalRating}
-              <span className="text-xs text-zinc-500 font-normal">/100</span>
+              <span className="text-[9px] text-slate-500 font-normal">/100</span>
             </div>
           </div>
-          <div className="bg-zinc-950/80 border border-zinc-800 p-2.5 rounded-lg text-center font-mono">
-            <div className="text-[10px] text-zinc-500 uppercase">Energie-Level</div>
-            <div className="text-xl font-black text-amber-400">
+          <div className="bg-black/70 border border-white/10 p-2 rounded text-center font-mono min-w-[75px]">
+            <div className="text-[9px] text-slate-500 uppercase">Energie</div>
+            <div className="text-lg font-bold text-amber-400 font-mono">
               {assessment.energyRating}
-              <span className="text-xs text-zinc-500 font-normal">/100</span>
+              <span className="text-[9px] text-slate-500 font-normal">/100</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Analysis Details Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 font-mono text-xs">
         {/* Sub-Bass & Low-End */}
-        <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-lg p-3 flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-            <Volume2 className="w-3.5 h-3.5" />
-            <span>Tiefbass & Low-End Druck</span>
+        <div className="bg-white/5 border border-white/5 rounded p-2.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-[10px] uppercase">
+            <Volume2 className="w-3 h-3" />
+            <span>Tiefbass & Low-End</span>
           </div>
-          <p className="text-zinc-300 text-[11px] leading-relaxed">
+          <p className="text-slate-300 text-[10px] leading-relaxed">
             {assessment.subBassBalance}
           </p>
         </div>
 
         {/* Harmonic Flow */}
-        <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-lg p-3 flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5 text-purple-400 font-bold">
-            <Music className="w-3.5 h-3.5" />
-            <span>Harmonie & Camelot-Flow</span>
+        <div className="bg-white/5 border border-white/5 rounded p-2.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-purple-400 font-bold text-[10px] uppercase">
+            <Music className="w-3 h-3" />
+            <span>Harmonie & Camelot</span>
           </div>
-          <p className="text-zinc-300 text-[11px] leading-relaxed">
+          <p className="text-slate-300 text-[10px] leading-relaxed">
             {assessment.harmonicFlow}
           </p>
         </div>
 
         {/* Pacing Analysis */}
-        <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-lg p-3 flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5 text-cyan-400 font-bold">
-            <Award className="w-3.5 h-3.5" />
-            <span>Spannungsbogen & Crowd-Flow</span>
+        <div className="bg-white/5 border border-white/5 rounded p-2.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-blue-400 font-bold text-[10px] uppercase">
+            <Award className="w-3 h-3" />
+            <span>Dramaturgie & Pacing</span>
           </div>
-          <p className="text-zinc-300 text-[11px] leading-relaxed">
+          <p className="text-slate-300 text-[10px] leading-relaxed">
             {assessment.pacingAnalysis}
           </p>
         </div>
       </div>
 
       {/* Actionable Pro-DJ Transition Tips */}
-      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-lg p-3.5">
-        <h5 className="font-mono text-xs font-bold text-zinc-200 mb-2 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          Konkrete Empfehlungen für Übergänge & Performance:
+      <div className="bg-white/[0.02] border border-white/5 rounded p-2.5">
+        <h5 className="font-mono text-[10px] font-bold text-white mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          Empfehlungen für Set-Performance:
         </h5>
-        <ul className="space-y-1.5 font-mono text-[11px] text-zinc-300">
+        <ul className="space-y-1 font-mono text-[10px] text-slate-300">
           {assessment.transitionTips.map((tip, idx) => (
-            <li key={idx} className="flex items-start gap-2">
+            <li key={idx} className="flex items-start gap-1.5">
               <span className="text-emerald-400 font-bold mt-0.5">•</span>
               <span>{tip}</span>
             </li>
@@ -191,11 +191,11 @@ export const AiAssessmentCard: React.FC<AiAssessmentCardProps> = ({
       </div>
 
       {/* Stage PA Verdict */}
-      <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-lg p-3 flex items-center gap-3 font-mono">
-        <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-        <div className="text-xs">
-          <span className="text-emerald-400 font-bold mr-1">Bühnen-Empfehlung:</span>
-          <span className="text-zinc-200">{assessment.recommendation}</span>
+      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded p-2 flex items-center gap-2.5 font-mono">
+        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="text-[10px]">
+          <span className="text-emerald-400 font-bold mr-1">BÜHNEN-FAZIT:</span>
+          <span className="text-slate-200">{assessment.recommendation}</span>
         </div>
       </div>
     </div>

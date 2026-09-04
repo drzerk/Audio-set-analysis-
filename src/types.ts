@@ -46,6 +46,28 @@ export interface PeakMoment {
   type: 'main-drop' | 'acid-build' | 'sub-surge' | 'breakdown-climax';
 }
 
+export type SegmentTag =
+  | 'Warm-up'
+  | 'Build-up'
+  | 'Peak Hour'
+  | 'Hypnotic Plateau'
+  | 'Cool-down'
+  | 'Breakdown'
+  | string;
+
+export interface SetSegment {
+  id: string;
+  startTime: number; // in seconds
+  endTime: number; // in seconds
+  tag: SegmentTag;
+  averageEnergy: number; // 0 - 100
+  peakEnergy: number; // 0 - 100
+  subBassIntensity: number; // 0 - 100
+  description: string;
+  color: string; // e.g. '#3b82f6', '#f59e0b', '#ec4899', '#10b981', '#a855f7'
+  isCustom?: boolean;
+}
+
 export interface TechnicalMetrics {
   peakDb: number;
   rmsDb: number;
@@ -85,6 +107,7 @@ export interface TechnoSetAnalysis {
   harmonyPoints: HarmonyPoint[];
   transitions: TransitionItem[];
   peakMoments: PeakMoment[];
+  segments: SetSegment[];
   technicalMetrics: TechnicalMetrics;
   aiAssessment?: AiAssessment;
   isCloudSynced: boolean;
@@ -93,3 +116,156 @@ export interface TechnoSetAnalysis {
 }
 
 export type BoothTheme = 'booth-dark' | 'red-stage-night' | 'cyan-laser';
+
+export interface TargetProfileMilestone {
+  percentTime: number; // 0 to 100
+  targetEnergy: number; // 0 to 100
+}
+
+export interface TargetEnergyProfile {
+  id: string;
+  name: string;
+  description: string;
+  category: 'Rising Intensity' | 'Constant Flow' | 'Double Peak' | 'Warm-up Opening' | 'Afterhour Deep' | 'Custom';
+  milestones: TargetProfileMilestone[];
+  tolerance: number; // +/- tolerance percentage, e.g. 10
+  color: string;
+  isCustom?: boolean;
+}
+
+export interface ProfileComparisonZone {
+  zoneName: string;
+  timeRangeFormatted: string;
+  startSec: number;
+  endSec: number;
+  targetAvg: number;
+  actualAvg: number;
+  deviation: number; // actualAvg - targetAvg
+  status: 'optimal' | 'slight-over' | 'slight-under' | 'critical-over' | 'critical-under';
+  feedback: string;
+}
+
+export interface ProfileComparisonFeedback {
+  overallScore: number; // 0 - 100
+  grade: 'S+' | 'A' | 'B' | 'C' | 'D';
+  headline: string;
+  summary: string;
+  pacingCorrelation: number; // -1 to 1 (Pearson/slope correlation)
+  avgDeviation: number; // percentage
+  maxDeviation: {
+    timestamp: number;
+    delta: number;
+    type: 'over-energy' | 'under-energy';
+    description: string;
+  };
+  zoneBreakdown: ProfileComparisonZone[];
+  djTips: string[];
+  targetProfile: TargetEnergyProfile;
+}
+
+export type ClashSeverity = 'critical' | 'moderate' | 'warning' | 'synergy';
+
+export type ClashType =
+  | 'anti-climax-drop'
+  | 'misplaced-boost-breakdown'
+  | 'dissonant-pressure-clash'
+  | 'harmonic-monotony'
+  | 'optimal-energy-lift'
+  | 'controlled-grounding'
+  | 'hypnotic-steady';
+
+export interface HarmonicEnergyClashPoint {
+  id: string;
+  timestamp: number; // in seconds
+  duration?: number;
+  fromKey: string;
+  toKey: string;
+  fromEnergy: number;
+  toEnergy: number;
+  energyDelta: number; // toEnergy - fromEnergy
+  camelotStepDelta: number; // -6 to +6
+  camelotDistance: number; // 0 to 6
+  severity: ClashSeverity;
+  clashType: ClashType;
+  title: string;
+  description: string;
+  remedy: string;
+  phaseContext: string;
+  xPct: number; // 0 to 100
+}
+
+export interface HarmonicEnergyAnalysisResult {
+  overallSynergyScore: number; // 0 - 100
+  grade: 'S+' | 'A' | 'B' | 'C' | 'D';
+  clashesCount: {
+    critical: number;
+    moderate: number;
+    warning: number;
+    synergy: number;
+    total: number;
+  };
+  clashPoints: HarmonicEnergyClashPoint[];
+  harmonicMomentumTrend: {
+    time: number;
+    energy: number;
+    energySmoothed: number;
+    keyCamelot: string;
+    keyNumber: number;
+    keyMode: 'A' | 'B';
+    keyColor: string;
+    harmonicTensionIndex: number;
+    isClashHotspot: boolean;
+    activeClash?: HarmonicEnergyClashPoint;
+  }[];
+  coherenceAssessment: string;
+  djDirectives: string[];
+}
+
+export type HardwareMixerType = 'xone96' | 'djm900' | 'djmV10' | 'parametric';
+
+export interface EqCutRecommendation {
+  id: string;
+  band: 'sub-low' | 'low-mid' | 'mid' | 'high-mid';
+  targetTrack: 'incoming' | 'outgoing' | 'both';
+  filterType: 'hpf' | 'bell-cut' | 'notch' | 'high-shelf' | 'low-shelf';
+  centerFrequencyHz: number;
+  bandwidthQ: number;
+  cutGainDb: number; // e.g. -4.5 or -24 for kill
+  targetMudIssue: string; // e.g. "Low-Mid Boxiness (220 Hz Resonanz & Schwebung)"
+  actionSummary: string; // e.g. "Senke 220 Hz um -4.5 dB mit moderatem Q am Lo-Mid Band"
+  priority: 'critical' | 'recommended' | 'optional';
+  hardwareKnobSettings: {
+    xone96: { knob: string; position: string; action: string };
+    djm900: { knob: string; position: string; action: string };
+    djmV10: { knob: string; position: string; action: string };
+    parametric: { freq: string; gain: string; q: string };
+  };
+}
+
+export interface TransitionEqAdvice {
+  transitionId: string;
+  timestamp: number;
+  fromKey: string;
+  toKey: string;
+  camelotDistance: number;
+  fromKeyRootHz: number;
+  toKeyRootHz: number;
+  mudRiskIndex: number; // 0 - 100
+  mudRiskLevel: 'minimal' | 'moderate' | 'high' | 'severe';
+  primaryMudZoneHz: string; // e.g. "175 - 280 Hz"
+  fundamentalCollision: string;
+  recommendedCuts: EqCutRecommendation[];
+  mixChoreography: {
+    phase: string;
+    bars: string;
+    action: string;
+    eqMove: string;
+  }[];
+  spectralSimulation: {
+    freqHz: number;
+    rawCombinedDb: number;
+    carvedCombinedDb: number;
+    mudAccumulationDb: number;
+  }[];
+}
+

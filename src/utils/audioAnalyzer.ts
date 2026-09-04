@@ -7,6 +7,7 @@ import {
   PeakMoment,
   TechnicalMetrics
 } from '../types';
+import { computeAutoTaggedSegments } from './segmentAutoTagger';
 
 // Musical notes and Camelot wheel mapping
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -306,6 +307,9 @@ export async function analyzeTechnoAudioFile(
     });
   }
 
+  onProgress?.('Set-Segmente auto-taggen (Warm-up, Peak, Cool-down)...', 98);
+  const segments = computeAutoTaggedSegments(Math.round(duration), energyPoints, { mode: 'adaptive' });
+
   onProgress?.('Analyse abgeschlossen!', 100);
 
   const formatBytes = (bytes: number) => {
@@ -332,6 +336,7 @@ export async function analyzeTechnoAudioFile(
     harmonyPoints,
     transitions,
     peakMoments,
+    segments,
     technicalMetrics: {
       peakDb,
       rmsDb,
@@ -359,8 +364,17 @@ export class TechnoPreviewAudioEngine {
   private currentStep: number = 0;
   private startTime: number = 0;
   private offsetSeconds: number = 0;
+  private eqCarveMode: 'normal' | 'muddy' | 'carved' = 'normal';
 
   constructor() {}
+
+  public setEqCarveMode(mode: 'normal' | 'muddy' | 'carved') {
+    this.eqCarveMode = mode;
+  }
+
+  public getEqCarveMode(): 'normal' | 'muddy' | 'carved' {
+    return this.eqCarveMode;
+  }
 
   public async start(bpm: number, startAtSeconds: number = 0) {
     if (!this.ctx) {
@@ -435,6 +449,28 @@ export class TechnoPreviewAudioEngine {
 
     osc.start(time);
     osc.stop(time + 0.38);
+
+    // Audio Simulation: Muddy blend has an unmanaged 2nd kick/sub rumble and 220Hz boxy drone
+    if (this.eqCarveMode === 'muddy') {
+      const clashOsc = this.ctx.createOscillator();
+      const clashGain = this.ctx.createGain();
+      clashOsc.type = 'sawtooth';
+      clashOsc.frequency.setValueAtTime(58, time); // 58Hz fighting the 42Hz kick
+      clashGain.gain.setValueAtTime(0.35, time);
+      clashGain.gain.exponentialRampToValueAtTime(0.001, time + 0.45);
+
+      const mudFilter = this.ctx.createBiquadFilter();
+      mudFilter.type = 'bandpass';
+      mudFilter.frequency.setValueAtTime(220, time);
+      mudFilter.Q.setValueAtTime(2.0, time);
+
+      clashOsc.connect(mudFilter);
+      mudFilter.connect(clashGain);
+      clashGain.connect(this.ctx.destination);
+
+      clashOsc.start(time);
+      clashOsc.stop(time + 0.45);
+    }
   }
 
   private triggerHiHat(time: number) {

@@ -173,6 +173,52 @@ export const DEMO_SETS: TechnoSetAnalysis[] = [
         type: 'acid-build'
       }
     ],
+    segments: [
+      {
+        id: 'seg-berg-1',
+        startTime: 0,
+        endTime: 880,
+        tag: 'Warm-up',
+        averageEnergy: 65,
+        peakEnergy: 78,
+        subBassIntensity: 72,
+        description: 'Warm-up Phase: Etablierung des 141 BPM Industrial Grooves mit rollendem Subbass-Fundament.',
+        color: '#3b82f6'
+      },
+      {
+        id: 'seg-berg-2',
+        startTime: 880,
+        endTime: 1650,
+        tag: 'Build-up',
+        averageEnergy: 79,
+        peakEnergy: 94,
+        subBassIntensity: 82,
+        description: 'Build-up Phase: Anstieg der spektralen Dichte und Vorbereitung des Main Climax.',
+        color: '#f59e0b'
+      },
+      {
+        id: 'seg-berg-3',
+        startTime: 1650,
+        endTime: 3000,
+        tag: 'Peak Hour',
+        averageEnergy: 94,
+        peakEnergy: 100,
+        subBassIntensity: 98,
+        description: 'Peak Hour Climax: Ungebremster 143 BPM Berghain Main-Room Druck mit Spitzenwerten bei 100% Energie.',
+        color: '#ec4899'
+      },
+      {
+        id: 'seg-berg-4',
+        startTime: 3000,
+        endTime: 3600,
+        tag: 'Cool-down',
+        averageEnergy: 71,
+        peakEnergy: 82,
+        subBassIntensity: 76,
+        description: 'Cool-down Phase: Ausklang der Acid-Sequenzen und Übergang in das atmosphärische Set-Outro.',
+        color: '#10b981'
+      }
+    ],
     aiAssessment: {
       headline: 'Brachiales, klanglich erstklassig kontrolliertes Peak-Time Techno-Masterpiece',
       vibeProfile: 'Berghain Heavy Industrial / Raw Hypnotic (141.0 - 143.5 BPM)',
@@ -307,6 +353,52 @@ export const DEMO_SETS: TechnoSetAnalysis[] = [
         type: 'main-drop'
       }
     ],
+    segments: [
+      {
+        id: 'seg-awk-1',
+        startTime: 0,
+        endTime: 800,
+        tag: 'Warm-up',
+        averageEnergy: 66,
+        peakEnergy: 76,
+        subBassIntensity: 72,
+        description: 'Warm-up Phase: 138 BPM Einleitung und Einstieg in das Open-Air Festival Setup.',
+        color: '#3b82f6'
+      },
+      {
+        id: 'seg-awk-2',
+        startTime: 800,
+        endTime: 1700,
+        tag: 'Build-up',
+        averageEnergy: 81,
+        peakEnergy: 95,
+        subBassIntensity: 84,
+        description: 'Build-up Phase: Progressive Beschleunigung auf 142.5 BPM und Einführung der 303 Acid-Linie.',
+        color: '#f59e0b'
+      },
+      {
+        id: 'seg-awk-3',
+        startTime: 1700,
+        endTime: 3100,
+        tag: 'Peak Hour',
+        averageEnergy: 96,
+        peakEnergy: 99,
+        subBassIntensity: 97,
+        description: 'Peak Hour Climax: Maximaler Festival-Pegel mit Hard-Techno Drops bei 146 BPM.',
+        color: '#ec4899'
+      },
+      {
+        id: 'seg-awk-4',
+        startTime: 3100,
+        endTime: 3600,
+        tag: 'Cool-down',
+        averageEnergy: 72,
+        peakEnergy: 80,
+        subBassIntensity: 78,
+        description: 'Cool-down Phase: Druckreduktion und Vorbereitung auf den nächsten Act.',
+        color: '#10b981'
+      }
+    ],
     aiAssessment: {
       headline: 'Hochoktaniges Festival-Set mit kompromisslosem Vorwärtsdrang',
       vibeProfile: 'Peak-Time Hard / Acid Techno (138 -> 146 BPM)',
@@ -410,6 +502,52 @@ export const DEMO_SETS: TechnoSetAnalysis[] = [
         type: 'sub-surge'
       }
     ],
+    segments: [
+      {
+        id: 'seg-tres-1',
+        startTime: 0,
+        endTime: 1100,
+        tag: 'Warm-up',
+        averageEnergy: 52,
+        peakEnergy: 65,
+        subBassIntensity: 68,
+        description: 'Warm-up Phase: Tiefer, resonanter Sub-Bass Einstieg in die Tresor-Kellerakustik.',
+        color: '#3b82f6'
+      },
+      {
+        id: 'seg-tres-2',
+        startTime: 1100,
+        endTime: 2100,
+        tag: 'Hypnotic Plateau',
+        averageEnergy: 74,
+        peakEnergy: 82,
+        subBassIntensity: 86,
+        description: 'Hypnotic Plateau: Hypnotisch rollender Detroit/Berlin Dub-Chords Groove ohne Hektik.',
+        color: '#a855f7'
+      },
+      {
+        id: 'seg-tres-3',
+        startTime: 2100,
+        endTime: 2900,
+        tag: 'Peak Hour',
+        averageEnergy: 81,
+        peakEnergy: 85,
+        subBassIntensity: 92,
+        description: 'Peak Hour Climax: Intensivster Moment mit tiefstem 40-Hz Sub-Bass Peak.',
+        color: '#ec4899'
+      },
+      {
+        id: 'seg-tres-4',
+        startTime: 2900,
+        endTime: 3600,
+        tag: 'Cool-down',
+        averageEnergy: 58,
+        peakEnergy: 68,
+        subBassIntensity: 65,
+        description: 'Cool-down Phase: Monochrome Ausblendung mit analogen Tape-Echo Delays.',
+        color: '#10b981'
+      }
+    ],
     aiAssessment: {
       headline: 'Meisterhaft subtiles, hypnotisches Tiefen-Techno-Set',
       vibeProfile: 'Tresor Vault Dub / Deep Hypnotic Techno (135 BPM)',
@@ -423,6 +561,205 @@ export const DEMO_SETS: TechnoSetAnalysis[] = [
         'Hervorragende Dynamikspanne (10.4 dB) – der Sound bleibt lebendig und atmet.'
       ],
       recommendation: 'Goldstandard für Clubkeller und lange Afterhour-Sets.'
+    }
+  },
+  {
+    id: 'set-warehouse-raw-clash-144',
+    name: 'Warehouse Tension & Harmonic Clash Showcase 144',
+    fileName: 'warehouse_live_session_raw_clash.wav',
+    fileSizeFormatted: '498 MB',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    duration: 3600,
+    bpmAverage: 144.2,
+    bpmMin: 142.0,
+    bpmMax: 146.0,
+    dominantKey: '8A (A-Moll)',
+    isCloudSynced: false,
+    customNotes: 'Live-Aufnahme mit bewussten tonalen Kontrasten zur Demonstration von Dissonanzen und Anti-Climax-Stellen.',
+    technicalMetrics: {
+      peakDb: -0.2,
+      rmsDb: -8.0,
+      lufsEstimated: -7.5,
+      dynamicRangeDb: 7.8,
+      subMonoCleanScore: 92,
+      clippingEvents: 2,
+      tempoDriftPercent: 1.1
+    },
+    bpmPoints: [
+      { time: 0, bpm: 142.0, confidence: 0.95 },
+      { time: 900, bpm: 143.5, confidence: 0.97 },
+      { time: 1800, bpm: 144.5, confidence: 0.98 },
+      { time: 2700, bpm: 145.2, confidence: 0.97 },
+      { time: 3600, bpm: 144.0, confidence: 0.94 }
+    ],
+    energyPoints: [
+      { time: 0, energy: 50, subBass: 55, midHigh: 45, tension: 45 },
+      { time: 600, energy: 72, subBass: 76, midHigh: 68, tension: 65 },
+      { time: 1140, energy: 44, subBass: 25, midHigh: 62, tension: 88 },
+      { time: 1220, energy: 95, subBass: 96, midHigh: 94, tension: 96 },
+      { time: 1700, energy: 78, subBass: 82, midHigh: 74, tension: 75 },
+      { time: 1920, energy: 48, subBass: 28, midHigh: 65, tension: 92 },
+      { time: 2000, energy: 98, subBass: 99, midHigh: 96, tension: 99 },
+      { time: 2600, energy: 88, subBass: 90, midHigh: 85, tension: 80 },
+      { time: 2700, energy: 46, subBass: 28, midHigh: 60, tension: 50 },
+      { time: 3100, energy: 94, subBass: 95, midHigh: 92, tension: 92 },
+      { time: 3600, energy: 60, subBass: 68, midHigh: 55, tension: 48 }
+    ],
+    harmonyPoints: [
+      { time: 0, keyCamelot: '8A', keyNote: 'A-Moll', confidence: 0.95 },
+      { time: 1200, keyCamelot: '12A', keyNote: 'C#-Moll', confidence: 0.91 },
+      { time: 1980, keyCamelot: '10A', keyNote: 'H-Moll', confidence: 0.93 },
+      { time: 2700, keyCamelot: '11A', keyNote: 'F#-Moll', confidence: 0.94 },
+      { time: 3100, keyCamelot: '12A', keyNote: 'C#-Moll', confidence: 0.96 }
+    ],
+    transitions: [
+      {
+        id: 'trans-clash-1',
+        timestamp: 600,
+        duration: 38,
+        qualityScore: 94,
+        phaseScore: 96,
+        harmonicScore: 98,
+        eqClashRisk: 'low',
+        fromKey: '8A',
+        toKey: '8A',
+        fromBpm: 142.5,
+        toBpm: 143.0,
+        notes: 'Solider Warm-up Blend in gleicher Tonart 8A. Sehr saubere Phasen.',
+        type: 'seamless-blend'
+      },
+      {
+        id: 'trans-clash-2',
+        timestamp: 1200,
+        duration: 32,
+        qualityScore: 68,
+        phaseScore: 84,
+        harmonicScore: 52,
+        eqClashRisk: 'high',
+        fromKey: '8A',
+        toKey: '12A',
+        fromBpm: 143.5,
+        toBpm: 144.2,
+        notes: 'Dissonanz-Kollision: 4-Schritte-Sprung von 8A (A-Moll) nach 12A (C#-Moll) bei vollem 95% Pegel.',
+        type: 'seamless-blend'
+      },
+      {
+        id: 'trans-clash-3',
+        timestamp: 1980,
+        duration: 28,
+        qualityScore: 72,
+        phaseScore: 88,
+        harmonicScore: 65,
+        eqClashRisk: 'medium',
+        fromKey: '12A',
+        toKey: '10A',
+        fromBpm: 144.5,
+        toBpm: 145.0,
+        notes: 'Paradoxer Anti-Climax: Energie explodiert von 48% auf 98%, während die Tonart -2 Schritte (12A nach 10A) absackt.',
+        type: 'cut-drop'
+      },
+      {
+        id: 'trans-clash-4',
+        timestamp: 2700,
+        duration: 30,
+        qualityScore: 78,
+        phaseScore: 85,
+        harmonicScore: 75,
+        eqClashRisk: 'medium',
+        fromKey: '10A',
+        toKey: '11A',
+        fromBpm: 145.2,
+        toBpm: 144.8,
+        notes: 'Deplatzierter Key-Boost (+1) mitten im tiefen Breakdown-Loch (46% Energie).',
+        type: 'filter-sweep'
+      },
+      {
+        id: 'trans-clash-5',
+        timestamp: 3100,
+        duration: 36,
+        qualityScore: 96,
+        phaseScore: 97,
+        harmonicScore: 98,
+        eqClashRisk: 'low',
+        fromKey: '11A',
+        toKey: '12A',
+        fromBpm: 144.8,
+        toBpm: 144.5,
+        notes: 'Idealer Quintensprung (+1) direkt auf den letzten Peak-Drop. Pure Synergie!',
+        type: 'breakdown-swap'
+      }
+    ],
+    peakMoments: [
+      {
+        id: 'peak-clash-1',
+        timestamp: 1220,
+        label: 'Drop 1 - 12A Dissonant Climax',
+        energyLevel: 95,
+        spectralPower: -5.8,
+        dropIntensity: 94,
+        description: 'Heftiger Drop mit überlappender 12A Melodie über 8A Rest-Bassline.',
+        type: 'main-drop'
+      },
+      {
+        id: 'peak-clash-2',
+        timestamp: 2000,
+        label: 'Drop 2 - 98% Overdrive Drop',
+        energyLevel: 98,
+        spectralPower: -5.3,
+        dropIntensity: 98,
+        description: 'Set-Höhepunkt mit maximalem Schalldruck.',
+        type: 'sub-surge'
+      }
+    ],
+    segments: [
+      {
+        id: 'seg-clash-1',
+        startTime: 0,
+        endTime: 1140,
+        tag: 'Warm-up',
+        averageEnergy: 62,
+        peakEnergy: 74,
+        subBassIntensity: 68,
+        description: 'Warm-up Phase in 8A.',
+        color: '#3b82f6'
+      },
+      {
+        id: 'seg-clash-2',
+        startTime: 1140,
+        endTime: 2600,
+        tag: 'Peak Hour',
+        averageEnergy: 92,
+        peakEnergy: 98,
+        subBassIntensity: 96,
+        description: 'Turbulente Peak Hour mit massiven Tonart-Wechseln.',
+        color: '#ec4899'
+      },
+      {
+        id: 'seg-clash-3',
+        startTime: 2600,
+        endTime: 3600,
+        tag: 'Cool-down',
+        averageEnergy: 70,
+        peakEnergy: 94,
+        subBassIntensity: 78,
+        description: 'Breakdown und Abschluss-Progression.',
+        color: '#10b981'
+      }
+    ],
+    aiAssessment: {
+      headline: 'Hochexplosives Set mit aufschlussreichen harmonischen Reibungszonen',
+      vibeProfile: 'Raw Warehouse Industrial & Acid Clash (142 - 146 BPM)',
+      technicalRating: 88,
+      energyRating: 94,
+      subBassBalance: 'Solider Druck. Bei 20:00 Min True-Peak Limitierung leicht hörbar.',
+      harmonicFlow: 'Mehrere signifikante Konflikte zwischen Schalldruck und Camelot-Schritten aufgedeckt.',
+      pacingAnalysis: 'Intensiv und mutig. Die Reibung bei Drop 1 erzeugt zwar Tension, polarisiert aber tonale Hörer.',
+      transitionTips: [
+        'Übergang #2 bei 20:00 Min: Nutze Low-Cut vor dem Drop um den dissonanten Tonart-Schock abzufedern.',
+        'Den Key-Lift bei 45:00 Min erst beim Drop freigeben.'
+      ],
+      recommendation: 'Hervorragendes Anschauungsmaterial für das Harmonic-Energy Clash Visualizer Tool.'
     }
   }
 ];

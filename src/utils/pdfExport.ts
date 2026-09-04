@@ -1,5 +1,9 @@
 import jsPDF from 'jspdf';
 import { TechnoSetAnalysis } from '../types';
+import { computeAutoTaggedSegments } from './segmentAutoTagger';
+import { DEFAULT_TARGET_PROFILES, compareSetAgainstProfile } from './targetProfileComparator';
+import { analyzeHarmonicEnergyClashes } from './harmonicEnergyClashDetector';
+import { generateTransitionEqAdvice } from './eqFrequencyAdvisor';
 
 export function formatTimeSeconds(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -244,21 +248,88 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
     y += 7;
   });
 
-  // PAGE 2: AI & Expert Assessment
+  // PAGE 2: Set Segments & AI Assessment
   doc.addPage();
   let y2 = margin;
 
   doc.setFillColor(15, 18, 24);
   doc.rect(0, 0, pageWidth, 20, 'F');
-  doc.setFillColor(34, 197, 94);
+  doc.setFillColor(236, 72, 153);
   doc.rect(0, 20, pageWidth, 1, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(255, 255, 255);
-  doc.text('4. MASTER-BEURTEILUNG & CROWD-PSYCHOLOGIE (AI ENGINE)', margin, 13);
+  doc.text('4. AUTO-GETAGGTE SET-SEGMENTE & PHASEN-DRAMATURGIE', margin, 13);
 
   y2 = 28;
+
+  // Render Set Segments Table
+  const segments = set.segments && set.segments.length > 0
+    ? set.segments
+    : computeAutoTaggedSegments(set.duration, set.energyPoints);
+
+  doc.setFillColor(30, 41, 59);
+  doc.rect(margin, y2, pageWidth - margin * 2, 7, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('Zeitspanne', margin + 3, y2 + 4.8);
+  doc.text('Phase / Auto-Tag', margin + 34, y2 + 4.8);
+  doc.text('Ø Energie', margin + 74, y2 + 4.8);
+  doc.text('Peak-Wert', margin + 96, y2 + 4.8);
+  doc.text('Sub-Bass', margin + 116, y2 + 4.8);
+  doc.text('Phasen-Charakteristik & Pacing', margin + 135, y2 + 4.8);
+
+  y2 += 7;
+
+  segments.forEach((seg, idx) => {
+    doc.setFillColor(idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 252 : 255);
+    doc.rect(margin, y2, pageWidth - margin * 2, 7, 'F');
+    doc.setDrawColor(230, 235, 245);
+    doc.line(margin, y2 + 7, pageWidth - margin, y2 + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${formatTimeSeconds(seg.startTime)} - ${formatTimeSeconds(seg.endTime)}`, margin + 3, y2 + 4.8);
+
+    doc.setFont('helvetica', 'bold');
+    if (seg.tag === 'Peak Hour') {
+      doc.setTextColor(236, 72, 153);
+    } else if (seg.tag === 'Build-up') {
+      doc.setTextColor(245, 158, 11);
+    } else if (seg.tag === 'Cool-down') {
+      doc.setTextColor(16, 185, 129);
+    } else {
+      doc.setTextColor(59, 130, 246);
+    }
+    doc.text(seg.tag, margin + 34, y2 + 4.8);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${seg.averageEnergy}%`, margin + 74, y2 + 4.8);
+    doc.setTextColor(236, 72, 153);
+    doc.text(`${seg.peakEnergy}%`, margin + 96, y2 + 4.8);
+    doc.setTextColor(245, 158, 11);
+    doc.text(`${seg.subBassIntensity}%`, margin + 116, y2 + 4.8);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 70, 85);
+    const shortDesc = seg.description.length > 38 ? seg.description.substring(0, 38) + '...' : seg.description;
+    doc.text(shortDesc, margin + 135, y2 + 4.8);
+
+    y2 += 7;
+  });
+
+  y2 += 8;
+
+  // Section 5: AI & Master Assessment
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('5. MASTER-BEURTEILUNG & CROWD-PSYCHOLOGIE (AI ENGINE)', margin, y2);
+  y2 += 5;
 
   if (set.aiAssessment) {
     const ai = set.aiAssessment;
@@ -357,6 +428,198 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
     doc.setTextColor(21, 128, 61);
     const splitRec = doc.splitTextToSize(ai.recommendation, pageWidth - margin * 2 - 8);
     doc.text(splitRec, margin + 4, y2 + 13);
+    y2 += 22;
+  }
+
+  // Section 6: Target Energy Profile Benchmark (Rising Intensity & Constant Flow)
+  if (y2 + 40 > pageHeight - 25) {
+    doc.addPage();
+    y2 = margin;
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 20, 'F');
+    doc.setFillColor(6, 182, 212);
+    doc.rect(0, 20, pageWidth, 1, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text('6. ZIEL-ENERGIEPROFIL BENCHMARKS & DRAMATURGIE', margin, 13);
+    y2 = 28;
+  } else {
+    y2 += 4;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('6. ZIEL-ENERGIEPROFIL BENCHMARKS & PERFORMANCE', margin, y2);
+    y2 += 5;
+  }
+
+  const profileRising = DEFAULT_TARGET_PROFILES[0];
+  const profileFlow = DEFAULT_TARGET_PROFILES[1];
+  const fbRising = compareSetAgainstProfile(set, profileRising);
+  const fbFlow = compareSetAgainstProfile(set, profileFlow);
+
+  // Dual Profile Comparison Box
+  const colWidth = (pageWidth - margin * 2 - 6) / 2;
+
+  // Box 1: Rising Intensity
+  doc.setFillColor(253, 242, 248);
+  doc.roundedRect(margin, y2, colWidth, 32, 2, 2, 'F');
+  doc.setDrawColor(244, 114, 182);
+  doc.roundedRect(margin, y2, colWidth, 32, 2, 2, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(190, 24, 93);
+  doc.text('PROFIL: RISING INTENSITY', margin + 3, y2 + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(70, 80, 95);
+  doc.text(`Match-Score: ${fbRising.overallScore}% (${fbRising.grade})`, margin + 3, y2 + 11.5);
+  doc.text(`Pacing-Korrelation: ${fbRising.pacingCorrelation > 0 ? '+' : ''}${fbRising.pacingCorrelation}`, margin + 3, y2 + 16.5);
+  doc.text(`Durchschnittl. Abweichung: ±${fbRising.avgDeviation}%`, margin + 3, y2 + 21.5);
+  doc.text(`Max. Divergenz: ${fbRising.maxDeviation.delta > 0 ? '+' : ''}${fbRising.maxDeviation.delta}% bei ${formatTimeSeconds(fbRising.maxDeviation.timestamp)}`, margin + 3, y2 + 26.5);
+
+  // Box 2: Constant Flow
+  const col2X = margin + colWidth + 6;
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(col2X, y2, colWidth, 32, 2, 2, 'F');
+  doc.setDrawColor(147, 197, 253);
+  doc.roundedRect(col2X, y2, colWidth, 32, 2, 2, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(29, 78, 216);
+  doc.text('PROFIL: CONSTANT FLOW (HYPNOTIC)', col2X + 3, y2 + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(70, 80, 95);
+  doc.text(`Match-Score: ${fbFlow.overallScore}% (${fbFlow.grade})`, col2X + 3, y2 + 11.5);
+  doc.text(`Pacing-Korrelation: ${fbFlow.pacingCorrelation > 0 ? '+' : ''}${fbFlow.pacingCorrelation}`, col2X + 3, y2 + 16.5);
+  doc.text(`Durchschnittl. Abweichung: ±${fbFlow.avgDeviation}%`, col2X + 3, y2 + 21.5);
+  doc.text(`Max. Divergenz: ${fbFlow.maxDeviation.delta > 0 ? '+' : ''}${fbFlow.maxDeviation.delta}% bei ${formatTimeSeconds(fbFlow.maxDeviation.timestamp)}`, col2X + 3, y2 + 26.5);
+
+  y2 += 36;
+
+  // Section 7: Camelot Harmonik vs. Energie-Trend (Konflikt-Diagnose)
+  if (y2 + 45 > pageHeight - 25) {
+    doc.addPage();
+    y2 = margin;
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 20, 'F');
+    doc.setFillColor(147, 51, 234);
+    doc.rect(0, 20, pageWidth, 1, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text('7. CAMELOT-HARMONIK VS. ENERGIE-TREND (KONFLIKT-ANALYSE)', margin, 13);
+    y2 = 28;
+  } else {
+    y2 += 4;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('7. CAMELOT-HARMONIK VS. ENERGIE-TREND (KONFLIKT-ANALYSE)', margin, y2);
+    y2 += 6;
+  }
+
+  const harmonicClashAnalysis = analyzeHarmonicEnergyClashes(set);
+
+  doc.setFillColor(250, 245, 255);
+  doc.roundedRect(margin, y2, pageWidth - margin * 2, 28, 2, 2, 'F');
+  doc.setDrawColor(216, 180, 254);
+  doc.roundedRect(margin, y2, pageWidth - margin * 2, 28, 2, 2, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(126, 34, 206);
+  doc.text(
+    `Harmonisch-Energetischer Kohärenz-Score: ${harmonicClashAnalysis.overallSynergyScore}% (Rang ${harmonicClashAnalysis.grade})`,
+    margin + 3,
+    y2 + 5.5
+  );
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(70, 80, 95);
+  doc.text(
+    `Identifizierte Stellen: ${harmonicClashAnalysis.clashesCount.critical} Kritische Konflikte | ${harmonicClashAnalysis.clashesCount.moderate} Moderate Reibungen | ${harmonicClashAnalysis.clashesCount.synergy} Optimale Synergien`,
+    margin + 3,
+    y2 + 11
+  );
+
+  const splitFazit = doc.splitTextToSize(harmonicClashAnalysis.coherenceAssessment, pageWidth - margin * 2 - 8);
+  doc.text(splitFazit, margin + 3, y2 + 16);
+
+  if (harmonicClashAnalysis.djDirectives.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(109, 40, 217);
+    const splitTip = doc.splitTextToSize(`DJ-Leitlinie: ${harmonicClashAnalysis.djDirectives[0]}`, pageWidth - margin * 2 - 8);
+    doc.text(splitTip, margin + 3, y2 + 23);
+  }
+
+  y2 += 32;
+
+  // Section 8: Harmonischer EQ-Mud Advisor & Frequenz-Schnitte
+  if (set.transitions && set.transitions.length > 0) {
+    if (y2 + 45 > pageHeight - 25) {
+      doc.addPage();
+      y2 = margin;
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, pageWidth, 20, 'F');
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, 20, pageWidth, 1, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text('8. HARMONISCHER EQ-MUD ADVISOR & FREQUENZ-SCHNITTE', margin, 13);
+      y2 = 28;
+    } else {
+      y2 += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text('8. HARMONISCHER EQ-MUD ADVISOR & FREQUENZ-SCHNITTE', margin, y2);
+      y2 += 6;
+    }
+
+    // Pick transition with highest mud risk
+    const allAdvices = set.transitions.map((t) => generateTransitionEqAdvice(t));
+    const highestMud = allAdvices.reduce((prev, curr) => (curr.mudRiskIndex > prev.mudRiskIndex ? curr : prev));
+
+    doc.setFillColor(240, 253, 250);
+    doc.roundedRect(margin, y2, pageWidth - margin * 2, 34, 2, 2, 'F');
+    doc.setDrawColor(153, 246, 228);
+    doc.roundedRect(margin, y2, pageWidth - margin * 2, 34, 2, 2, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(15, 118, 110);
+    doc.text(
+      `Fokus-Übergang: @ ${formatTimeSeconds(highestMud.timestamp)} (${highestMud.fromKey} -> ${highestMud.toKey}) — Matsch-Risiko: ${highestMud.mudRiskIndex}% (${highestMud.mudRiskLevel.toUpperCase()})`,
+      margin + 3,
+      y2 + 5.5
+    );
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(70, 80, 95);
+    doc.text(`Kritische Matsch-Zone: ${highestMud.primaryMudZoneHz} | Grundton-Kollision: ${highestMud.fromKeyRootHz.toFixed(1)} Hz vs ${highestMud.toKeyRootHz.toFixed(1)} Hz`, margin + 3, y2 + 11);
+
+    // List cuts
+    const cutsSummary = highestMud.recommendedCuts
+      .slice(0, 2)
+      .map((c) => `• ${c.actionSummary} (Xone:96: ${c.hardwareKnobSettings.xone96.knob} @ ${c.hardwareKnobSettings.xone96.position})`)
+      .join('  ');
+    const splitCuts = doc.splitTextToSize(cutsSummary, pageWidth - margin * 2 - 8);
+    doc.text(splitCuts, margin + 3, y2 + 16.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(13, 148, 136);
+    doc.text(`Kick-Swap Regel: ${highestMud.mixChoreography[2]?.action || 'Subbass schlagartig auf Takt 1 tauschen.'}`, margin + 3, y2 + 28);
+
+    y2 += 38;
   }
 
   // Footer on all pages
