@@ -330,6 +330,7 @@ export default function App() {
             onUpdateTransition={handleUpdateTransition}
             onDeleteTransition={handleDeleteTransition}
             onAddTransitionAtCurrentTime={handleAddTransitionAtCurrentTime}
+            onSeek={handleSeek}
           />
 
           <PeakMomentsRadar

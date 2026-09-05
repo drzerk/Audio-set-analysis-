@@ -1,8 +1,10 @@
 import express from "express";
 import path from "path";
+import { Readable } from "node:stream";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import { resolveStreamUrl, getPopularTechnoSets } from "./server/streamResolver.ts";
 
 dotenv.config();
 
@@ -171,6 +173,88 @@ Antworte AUSSCHLIESSLICH mit gültigem JSON ohne Markdown-Codeblöcke mit folgen
       success: false,
       error: error.message || "Fehler bei der KI-Analyse"
     });
+  }
+});
+
+// Streaming & Platform Integration endpoints (SoundCloud, HearThis, Mixcloud, Direct URLs)
+app.post("/api/stream/resolve", async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, error: "URL ist erforderlich." });
+    }
+    const metadata = await resolveStreamUrl(url);
+    res.json({ success: true, metadata });
+  } catch (error: any) {
+    console.error("Resolve error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Fehler beim Auflösen des Audio-Streams"
+    });
+  }
+});
+
+app.get("/api/stream/popular-techno", async (req, res) => {
+  try {
+    const popular = await getPopularTechnoSets();
+    res.json({ success: true, sets: popular });
+  } catch (error: any) {
+    console.error("Popular sets error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Audio streaming proxy that forwards audio bytes with CORS headers to the browser
+app.get("/api/stream/proxy", async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || typeof url !== "string") {
+      return res.status(400).send("URL parameter missing");
+    }
+
+    const headers: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "*/*"
+    };
+    if (req.headers.range) {
+      headers["range"] = req.headers.range as string;
+    }
+
+    const targetResponse = await fetch(url, {
+      headers,
+      redirect: "follow"
+    });
+
+    if (!targetResponse.ok && targetResponse.status !== 206) {
+      return res.status(targetResponse.status).send(`Stream fetch failed: ${targetResponse.statusText}`);
+    }
+
+    // CORS & Audio Streaming headers
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    const contentType = targetResponse.headers.get("content-type") || "audio/mpeg";
+    const contentLength = targetResponse.headers.get("content-length");
+    const contentRange = targetResponse.headers.get("content-range");
+
+    res.setHeader("Content-Type", contentType);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    if (contentRange) res.setHeader("Content-Range", contentRange);
+
+    res.status(targetResponse.status);
+
+    if (targetResponse.body) {
+      Readable.fromWeb(targetResponse.body as any).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err: any) {
+    console.error("Stream proxy error:", err);
+    if (!res.headersSent) {
+      res.status(500).send(`Stream proxy error: ${err.message}`);
+    }
   }
 });
 

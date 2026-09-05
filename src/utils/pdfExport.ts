@@ -4,6 +4,7 @@ import { computeAutoTaggedSegments } from './segmentAutoTagger';
 import { DEFAULT_TARGET_PROFILES, compareSetAgainstProfile } from './targetProfileComparator';
 import { analyzeHarmonicEnergyClashes } from './harmonicEnergyClashDetector';
 import { generateTransitionEqAdvice } from './eqFrequencyAdvisor';
+import { detectEnergyGaps } from './energyGapDetector';
 
 export function formatTimeSeconds(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -156,7 +157,7 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
   doc.text('Zeitpunkt', margin + 3, y + 4.8);
   doc.text('Länge', margin + 24, y + 4.8);
   doc.text('Score', margin + 39, y + 4.8);
-  doc.text('Phasen', margin + 55, y + 4.8);
+  doc.text('Phase (Δt / %)', margin + 53, y + 4.8);
   doc.text('Harmonie (Camelot)', margin + 74, y + 4.8);
   doc.text('Low-End Clash', margin + 112, y + 4.8);
   doc.text('DJ-Anmerkung & Bewertung', margin + 140, y + 4.8);
@@ -185,8 +186,19 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
     doc.text(`${t.qualityScore}%`, margin + 39, y + 4.8);
 
     doc.setFont('helvetica', 'normal');
+    if (t.phaseSyncAnalysis) {
+      if (t.phaseSyncAnalysis.isDriftProne) {
+        doc.setTextColor(239, 68, 68);
+      } else {
+        doc.setTextColor(16, 185, 129);
+      }
+      const deltaText = `${t.phaseSyncAnalysis.timeDeltaMs > 0 ? '+' : ''}${t.phaseSyncAnalysis.timeDeltaMs}ms`;
+      doc.text(`${deltaText} (${t.phaseSyncAnalysis.phaseCoherenceScore}%)`, margin + 53, y + 4.8);
+    } else {
+      doc.setTextColor(60, 70, 85);
+      doc.text(`${t.phaseScore}%`, margin + 55, y + 4.8);
+    }
     doc.setTextColor(60, 70, 85);
-    doc.text(`${t.phaseScore}%`, margin + 55, y + 4.8);
     doc.text(`${t.fromKey} -> ${t.toKey}`, margin + 74, y + 4.8);
 
     const clashColor = t.eqClashRisk === 'low' ? [16, 185, 129] : t.eqClashRisk === 'medium' ? [234, 179, 8] : [239, 68, 68];
@@ -194,7 +206,11 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
     doc.text(t.eqClashRisk.toUpperCase(), margin + 112, y + 4.8);
 
     doc.setTextColor(50, 60, 75);
-    const shortNote = t.notes.length > 38 ? t.notes.substring(0, 38) + '...' : t.notes;
+    const spikeTag = t.phaseSyncAnalysis?.barDriftHeatmap?.spikeSegments?.[0]
+      ? ` [Drift-Spike: Bars ${t.phaseSyncAnalysis.barDriftHeatmap.spikeSegments[0].startBar}-${t.phaseSyncAnalysis.barDriftHeatmap.spikeSegments[0].endBar}]`
+      : '';
+    const fullNote = `${t.notes}${spikeTag}`;
+    const shortNote = fullNote.length > 38 ? fullNote.substring(0, 38) + '...' : fullNote;
     doc.text(shortNote, margin + 140, y + 4.8);
 
     y += 7;
@@ -618,6 +634,65 @@ export function exportSetReportAsPdf(set: TechnoSetAnalysis) {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(13, 148, 136);
     doc.text(`Kick-Swap Regel: ${highestMud.mixChoreography[2]?.action || 'Subbass schlagartig auf Takt 1 tauschen.'}`, margin + 3, y2 + 28);
+
+    y2 += 38;
+  }
+
+  // Section 9: Energy-Gap Heatmap & Crowd-Flow Analyse
+  const energyGapAnalysis = detectEnergyGaps(set.energyPoints, set.duration, 'standard');
+  if (energyGapAnalysis.gaps.length > 0) {
+    if (y2 + 45 > pageHeight - 25) {
+      doc.addPage();
+      y2 = margin;
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, pageWidth, 20, 'F');
+      doc.setFillColor(245, 158, 11);
+      doc.rect(0, 20, pageWidth, 1, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text('9. ENERGY-GAP HEATMAP & CROWD-FLOW ANALYSE', margin, 13);
+      y2 = 28;
+    } else {
+      y2 += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text('9. ENERGY-GAP HEATMAP & CROWD-FLOW ANALYSE', margin, y2);
+      y2 += 6;
+    }
+
+    doc.setFillColor(255, 251, 235);
+    doc.roundedRect(margin, y2, pageWidth - margin * 2, 34, 2, 2, 'F');
+    doc.setDrawColor(253, 230, 138);
+    doc.roundedRect(margin, y2, pageWidth - margin * 2, 34, 2, 2, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(180, 83, 9);
+    doc.text(
+      `Flow-Kontinuitäts-Score: ${energyGapAnalysis.flowContinuityScore}/100 | ${energyGapAnalysis.gaps.length} Lulls identifiziert (${energyGapAnalysis.criticalGapsCount} kritisch) | ${energyGapAnalysis.totalGapDuration}s Gesamtdefizit`,
+      margin + 3,
+      y2 + 5.5
+    );
+
+    const worstGap = [...energyGapAnalysis.gaps].sort((a, b) => b.energyDeficit - a.energyDeficit)[0];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(70, 80, 95);
+    doc.text(
+      `Haupt-Schwachstelle: @ ${formatTimeSeconds(worstGap.startTime)} - ${formatTimeSeconds(worstGap.endTime)} (${worstGap.duration}s) • Min: ${worstGap.minEnergy}% (-${worstGap.energyDeficit}% unter Set-Ø)`,
+      margin + 3,
+      y2 + 11
+    );
+
+    const splitImpact = doc.splitTextToSize(`Risiko: ${worstGap.crowdFlowImpact}`, pageWidth - margin * 2 - 8);
+    doc.text(splitImpact, margin + 3, y2 + 16.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 83, 9);
+    const splitTip = doc.splitTextToSize(`DJ-Tipp: ${worstGap.actionableTip}`, pageWidth - margin * 2 - 8);
+    doc.text(splitTip, margin + 3, y2 + 25);
 
     y2 += 38;
   }

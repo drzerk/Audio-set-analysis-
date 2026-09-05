@@ -1,6 +1,7 @@
 import { TechnoSetAnalysis } from '../types';
+import { analyzeTransitionPhaseSync } from '../utils/phaseSyncAnalyzer';
 
-export const DEMO_SETS: TechnoSetAnalysis[] = [
+const RAW_DEMO_SETS: TechnoSetAnalysis[] = [
   {
     id: 'set-berghain-peak-142',
     name: 'Berghain 04:00 Peak-Time Raw Vault',
@@ -763,3 +764,11 @@ export const DEMO_SETS: TechnoSetAnalysis[] = [
     }
   }
 ];
+
+export const DEMO_SETS: TechnoSetAnalysis[] = RAW_DEMO_SETS.map((set) => ({
+  ...set,
+  transitions: set.transitions.map((t) => ({
+    ...t,
+    phaseSyncAnalysis: t.phaseSyncAnalysis || analyzeTransitionPhaseSync(t)
+  }))
+}));

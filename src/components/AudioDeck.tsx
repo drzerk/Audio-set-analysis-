@@ -73,9 +73,32 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
             ENERGIE-ANALYSE & WAVEFORM
           </span>
           <span className="text-slate-600 font-mono text-xs">•</span>
+          {currentSet.artworkUrl && (
+            <img
+              src={currentSet.artworkUrl}
+              alt={currentSet.name}
+              className="w-5 h-5 rounded object-cover border border-white/10 shrink-0 shadow-sm"
+              referrerPolicy="no-referrer"
+            />
+          )}
           <h2 className="font-mono text-xs sm:text-sm font-bold text-white uppercase tracking-wider truncate max-w-[200px] sm:max-w-md">
             {currentSet.name}
           </h2>
+          {currentSet.sourcePlatform && currentSet.sourcePlatform !== 'file' && (
+            <span
+              className={`text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold uppercase ${
+                currentSet.sourcePlatform === 'hearthis'
+                  ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                  : currentSet.sourcePlatform === 'soundcloud'
+                  ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                  : currentSet.sourcePlatform === 'mixcloud'
+                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+              }`}
+            >
+              {currentSet.sourcePlatform}
+            </span>
+          )}
           {activeSegment && (
             <div
               className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-mono font-bold uppercase tracking-wider"

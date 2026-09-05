@@ -1,6 +1,6 @@
 {
   "name": "TechnoSet Analyzer Pro",
-  "description": "Professionelle DJ-Set-Analyse mit BPM- und Harmonie-Verläufen, Übergangsqualitätsbewertung, Peak-Erkennung, PDF-Export und Offline-Modus.",
+  "description": "Professionelle DJ-Set-Analyse mit Phase-Sync & Waveform-Alignment, BPM- und Harmonie-Verläufen, Übergangsqualitätsbewertung, Peak-Erkennung, SoundCloud/HearThis/Mixcloud-Streaming und PDF-Export.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

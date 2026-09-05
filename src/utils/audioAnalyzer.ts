@@ -8,6 +8,7 @@ import {
   TechnicalMetrics
 } from '../types';
 import { computeAutoTaggedSegments } from './segmentAutoTagger';
+import { analyzeTransitionPhaseSync } from './phaseSyncAnalyzer';
 
 // Musical notes and Camelot wheel mapping
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -45,16 +46,25 @@ export interface AnalysisProgressCallback {
   (step: string, percent: number): void;
 }
 
+export interface AudioAnalysisOptions {
+  name: string;
+  fileName?: string;
+  fileSizeFormatted?: string;
+  audioBlobUrl?: string;
+  sourcePlatform?: 'file' | 'soundcloud' | 'hearthis' | 'mixcloud' | 'direct-stream';
+  sourceUrl?: string;
+  artistName?: string;
+  artworkUrl?: string;
+}
+
 /**
- * Analyzes an audio file completely offline using browser Web Audio API.
+ * Analyzes raw AudioBuffer data completely offline using browser Web Audio API.
  */
-export async function analyzeTechnoAudioFile(
-  file: File,
+export async function analyzeTechnoAudioBuffer(
+  arrayBuffer: ArrayBuffer,
+  options: AudioAnalysisOptions,
   onProgress?: AnalysisProgressCallback
 ): Promise<TechnoSetAnalysis> {
-  onProgress?.('Audiodatei einlesen...', 10);
-
-  const arrayBuffer = await file.arrayBuffer();
   onProgress?.('Audiodaten decodieren...', 25);
 
   const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -286,7 +296,7 @@ export async function analyzeTechnoAudioFile(
     const fromKey = harmonyPoints[Math.min(harmonyPoints.length - 1, Math.floor(tr / 2))]?.keyCamelot || initialCamelot;
     const toKey = harmonyPoints[Math.min(harmonyPoints.length - 1, Math.floor((tr + 1) / 2))]?.keyCamelot || initialCamelot;
 
-    transitions.push({
+    const transItem: TransitionItem = {
       id: `trans-${tr}`,
       timestamp: rawTime,
       duration: 32 + (tr % 3) * 12,
@@ -304,7 +314,11 @@ export async function analyzeTechnoAudioFile(
         ? 'Leichtes Subbass-Overlap; EQ-Kill etwas früher einsetzen.'
         : 'Solider Übergang mit harmonisch stimmiger Melodieführung.',
       type: tr % 2 === 0 ? 'seamless-blend' : 'breakdown-swap'
-    });
+    };
+
+    // Calculate phase sync alignment and drift vulnerability
+    transItem.phaseSyncAnalysis = analyzeTransitionPhaseSync(transItem, audioBuffer, duration);
+    transitions.push(transItem);
   }
 
   onProgress?.('Set-Segmente auto-taggen (Warm-up, Peak, Cool-down)...', 98);
@@ -312,18 +326,11 @@ export async function analyzeTechnoAudioFile(
 
   onProgress?.('Analyse abgeschlossen!', 100);
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  const audioUrl = URL.createObjectURL(file);
-
   return {
     id: `set-${Date.now()}`,
-    name: file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]/g, ' '),
-    fileName: file.name,
-    fileSizeFormatted: formatBytes(file.size),
+    name: options.name,
+    fileName: options.fileName,
+    fileSizeFormatted: options.fileSizeFormatted,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     duration: Math.round(duration),
@@ -347,8 +354,125 @@ export async function analyzeTechnoAudioFile(
       tempoDriftPercent: Math.round(((bpmMax - bpmMin) / bpmAverage) * 1000) / 10
     },
     isCloudSynced: false,
-    audioUrl
+    audioUrl: options.audioBlobUrl,
+    sourcePlatform: options.sourcePlatform,
+    sourceUrl: options.sourceUrl,
+    artistName: options.artistName,
+    artworkUrl: options.artworkUrl
   };
+}
+
+export function formatByteSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Analyzes a local file completely offline using browser Web Audio API.
+ */
+export async function analyzeTechnoAudioFile(
+  file: File,
+  onProgress?: AnalysisProgressCallback
+): Promise<TechnoSetAnalysis> {
+  onProgress?.('Audiodatei einlesen...', 10);
+
+  const arrayBuffer = await file.arrayBuffer();
+  const audioBlobUrl = URL.createObjectURL(file);
+
+  return analyzeTechnoAudioBuffer(
+    arrayBuffer,
+    {
+      name: file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]/g, ' '),
+      fileName: file.name,
+      fileSizeFormatted: formatByteSize(file.size),
+      audioBlobUrl,
+      sourcePlatform: 'file'
+    },
+    onProgress
+  );
+}
+
+/**
+ * Streams audio from SoundCloud, HearThis, Mixcloud or direct URL via CORS proxy,
+ * then decodes and analyzes it with the Web Audio API.
+ */
+export async function downloadAndAnalyzeStream(
+  streamUrl: string,
+  metadata: {
+    title: string;
+    artist?: string;
+    platform: 'soundcloud' | 'hearthis' | 'mixcloud' | 'direct-stream';
+    artworkUrl?: string;
+    permalinkUrl?: string;
+  },
+  onProgress?: AnalysisProgressCallback
+): Promise<TechnoSetAnalysis> {
+  onProgress?.('Verbinde mit Audio-Stream...', 5);
+
+  const proxyUrl = `/api/stream/proxy?url=${encodeURIComponent(streamUrl)}`;
+  const response = await fetch(proxyUrl);
+  if (!response.ok) {
+    throw new Error(`Audio-Stream konnte nicht geladen werden (HTTP ${response.status})`);
+  }
+
+  const contentLength = response.headers.get('content-length');
+  const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+  let receivedBytes = 0;
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('Streaming-Interface nicht verfügbar.');
+  }
+
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedBytes += value.length;
+
+    if (totalBytes > 0) {
+      const pct = Math.round((receivedBytes / totalBytes) * 100);
+      const mbLoaded = (receivedBytes / (1024 * 1024)).toFixed(1);
+      const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+      onProgress?.(
+        `Lade Audio-Stream (${mbLoaded} MB / ${mbTotal} MB • ${pct}%)...`,
+        Math.min(42, Math.round(5 + pct * 0.37))
+      );
+    } else {
+      const mbLoaded = (receivedBytes / (1024 * 1024)).toFixed(1);
+      onProgress?.(`Lade Audio-Stream (${mbLoaded} MB empfangen)...`, 20);
+    }
+  }
+
+  onProgress?.('Erstelle Audio-Buffer für Frequenzanalyse...', 45);
+
+  // Combine into continuous arrayBuffer
+  const allBytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    allBytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const arrayBuffer = allBytes.buffer;
+  const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+  const audioBlobUrl = URL.createObjectURL(audioBlob);
+
+  return analyzeTechnoAudioBuffer(
+    arrayBuffer,
+    {
+      name: metadata.title,
+      fileName: `${metadata.title}.mp3`,
+      fileSizeFormatted: formatByteSize(receivedBytes),
+      audioBlobUrl,
+      sourcePlatform: metadata.platform,
+      sourceUrl: metadata.permalinkUrl,
+      artistName: metadata.artist,
+      artworkUrl: metadata.artworkUrl
+    },
+    onProgress
+  );
 }
 
 /**

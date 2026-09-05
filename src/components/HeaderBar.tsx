@@ -98,11 +98,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         <button
           id="btn-upload-new-set"
           onClick={onOpenUpload}
-          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold font-mono rounded uppercase tracking-tighter flex items-center gap-1 cursor-pointer transition-colors"
-          title="Neues Set laden oder analysieren"
+          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold font-mono rounded uppercase tracking-tighter flex items-center gap-1.5 cursor-pointer transition-colors"
+          title="Neues Set oder Audio-Stream laden (SoundCloud, HearThis, Datei)"
         >
-          <Plus className="w-3 h-3 stroke-[3]" />
-          <span>Set laden</span>
+          <Radio className="w-3 h-3 stroke-[2.5]" />
+          <span>Set / Stream laden</span>
         </button>
       </div>
 
@@ -119,7 +119,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             }`}
           />
           <span className="text-[10px] font-mono text-slate-300 uppercase tracking-tight">
-            {isOnline ? 'OFFLINE ENGINE READY' : 'STAGE OFFLINE ACTIVE'}
+            {isOnline ? 'ONLINE & STREAM READY' : 'STAGE OFFLINE ACTIVE'}
           </span>
         </div>
 
@@ -131,8 +131,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             onClick={onOpenUpload}
             className="lg:hidden px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold font-mono rounded uppercase tracking-tighter flex items-center gap-1 cursor-pointer"
           >
-            <Plus className="w-3 h-3 stroke-[3]" />
-            <span>Laden</span>
+            <Radio className="w-3 h-3 stroke-[2.5]" />
+            <span>Stream / Set</span>
           </button>
 
           {/* PDF Export button */}

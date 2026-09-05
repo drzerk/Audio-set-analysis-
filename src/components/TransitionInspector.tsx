@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Zap,
   CheckCircle,
@@ -12,11 +12,15 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  Volume2
+  Volume2,
+  Activity
 } from 'lucide-react';
 import { TransitionItem, TechnoSetAnalysis } from '../types';
 import { formatTimeSeconds } from '../utils/pdfExport';
 import { generateTransitionEqAdvice } from '../utils/eqFrequencyAdvisor';
+import { analyzeTransitionPhaseSync } from '../utils/phaseSyncAnalyzer';
+import { PhaseSyncVisualizer } from './PhaseSyncVisualizer';
+import { TransitionDriftHeatmap } from './TransitionDriftHeatmap';
 
 interface TransitionInspectorProps {
   currentSet: TechnoSetAnalysis;
@@ -25,6 +29,8 @@ interface TransitionInspectorProps {
   onUpdateTransition: (updated: TransitionItem) => void;
   onDeleteTransition: (id: string) => void;
   onAddTransitionAtCurrentTime: () => void;
+  audioBuffer?: AudioBuffer | null;
+  onSeek?: (seconds: number) => void;
 }
 
 export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
@@ -33,12 +39,15 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
   onJumpToTransition,
   onUpdateTransition,
   onDeleteTransition,
-  onAddTransitionAtCurrentTime
+  onAddTransitionAtCurrentTime,
+  audioBuffer,
+  onSeek
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState<string>('');
-  const [filterType, setFilterType] = useState<'all' | 'clash' | 'perfect'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'clash' | 'perfect' | 'drift'>('all');
   const [expandedEqId, setExpandedEqId] = useState<string | null>(null);
+  const [expandedPhaseId, setExpandedPhaseId] = useState<string | null>(null);
 
   const transitions = currentSet.transitions;
 
@@ -47,9 +56,21 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
     transitions.reduce((acc, t) => acc + t.qualityScore, 0) / (transitions.length || 1)
   );
 
+  // Identify drift-prone transitions
+  const driftProneTransitions = useMemo(() => {
+    return transitions.filter((t) => {
+      const psa = t.phaseSyncAnalysis || analyzeTransitionPhaseSync(t, audioBuffer);
+      return psa.isDriftProne;
+    });
+  }, [transitions, audioBuffer]);
+
   const filteredTransitions = transitions.filter((t) => {
     if (filterType === 'perfect') return t.qualityScore >= 92;
     if (filterType === 'clash') return t.eqClashRisk === 'medium' || t.eqClashRisk === 'high';
+    if (filterType === 'drift') {
+      const psa = t.phaseSyncAnalysis || analyzeTransitionPhaseSync(t, audioBuffer);
+      return psa.isDriftProne;
+    }
     return true;
   });
 
@@ -81,6 +102,21 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
           <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 border border-white/10 text-amber-400 font-mono font-bold">
             Ø {avgQuality}%
           </span>
+          {driftProneTransitions.length > 0 ? (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-rose-300 font-mono font-bold flex items-center gap-1 cursor-pointer"
+              onClick={() => setFilterType('drift')}
+              title={`${driftProneTransitions.length} Übergänge mit Phasen-Drift erkannt`}
+            >
+              <Activity className="w-2.5 h-2.5" />
+              {driftProneTransitions.length} DRIFT-RISIKO
+            </span>
+          ) : (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono font-bold flex items-center gap-1">
+              <CheckCircle className="w-2.5 h-2.5" />
+              PHASEN-SYNCHRON
+            </span>
+          )}
         </div>
 
         {/* Filter & Quick Add Buttons */}
@@ -111,6 +147,18 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
             >
               Clash
             </button>
+            <button
+              onClick={() => setFilterType('drift')}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-1 ${
+                filterType === 'drift'
+                  ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40 font-bold'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+              title="Nur drift-gefährdete Übergänge anzeigen"
+            >
+              <Activity className="w-2.5 h-2.5" />
+              <span>Drift ({driftProneTransitions.length})</span>
+            </button>
           </div>
 
           {/* Add Marker at Current Playhead */}
@@ -127,7 +175,7 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
       </div>
 
       {/* Transition Scorecards List */}
-      <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
         {filteredTransitions.length === 0 ? (
           <div className="text-center py-6 text-[10px] font-mono text-slate-500">
             Keine Übergänge entsprechen dem ausgewählten Filter.
@@ -136,9 +184,12 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
           filteredTransitions.map((t, idx) => {
             const isEditing = editingId === t.id;
             const isNearPlayhead = Math.abs(t.timestamp - currentTime) < 30;
+            const phaseSync = t.phaseSyncAnalysis || analyzeTransitionPhaseSync(t, audioBuffer);
 
             const borderAccent =
-              t.qualityScore >= 90
+              phaseSync.driftRisk === 'critical-flam'
+                ? 'border-l-2 border-rose-500'
+                : t.qualityScore >= 90
                 ? 'border-l-2 border-emerald-500'
                 : t.eqClashRisk === 'high' || t.qualityScore < 80
                 ? 'border-l-2 border-pink-500'
@@ -187,6 +238,31 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
                       {t.qualityScore}% SCORE
                     </div>
 
+                    {/* Phase Sync Drift Badge */}
+                    <div
+                      className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase flex items-center gap-1 border ${
+                        phaseSync.driftRisk === 'locked'
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                          : phaseSync.driftRisk === 'mild-drift'
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                          : phaseSync.driftRisk === 'drift-prone'
+                          ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                          : 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse'
+                      }`}
+                      title={`Phasenversatz: ${phaseSync.timeDeltaMs > 0 ? '+' : ''}${phaseSync.timeDeltaMs}ms | Kohärenz: ${phaseSync.phaseCoherenceScore}% | Flam ab: Bar ${phaseSync.barsUntilFlam}`}
+                    >
+                      <Activity className="w-2.5 h-2.5" />
+                      <span>
+                        {phaseSync.driftRisk === 'locked'
+                          ? `PHASE LOCKED (${phaseSync.timeDeltaMs > 0 ? '+' : ''}${phaseSync.timeDeltaMs}ms)`
+                          : phaseSync.driftRisk === 'mild-drift'
+                          ? `MILD DRIFT (${phaseSync.timeDeltaMs > 0 ? '+' : ''}${phaseSync.timeDeltaMs}ms)`
+                          : phaseSync.driftRisk === 'drift-prone'
+                          ? `DRIFT-PRONE (${phaseSync.timeDeltaMs > 0 ? '+' : ''}${phaseSync.timeDeltaMs}ms)`
+                          : `CRITICAL FLAM (${phaseSync.timeDeltaMs > 0 ? '+' : ''}${phaseSync.timeDeltaMs}ms)`}
+                      </span>
+                    </div>
+
                     {/* Low-End Clash Badge */}
                     <div
                       className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
@@ -206,8 +282,31 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
                       {t.fromKey} → {t.toKey}
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions: Phase-Sync & EQ-Cuts Drawers */}
                     <div className="flex items-center gap-1 ml-1">
+                      {/* Phase Sync Waveform Inspector Toggle */}
+                      <button
+                        id={`btn-toggle-phase-sync-${t.id}`}
+                        onClick={() => {
+                          setExpandedPhaseId(expandedPhaseId === t.id ? null : t.id);
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                          expandedPhaseId === t.id
+                            ? 'bg-cyan-500 text-black shadow-sm'
+                            : 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30'
+                        }`}
+                        title="Waveform-Phasenabgleich & Transienten-Drift inspizieren"
+                      >
+                        <Activity className="w-2.5 h-2.5" />
+                        <span>Phase Sync</span>
+                        {expandedPhaseId === t.id ? (
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        ) : (
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        )}
+                      </button>
+
+                      {/* EQ-Cuts Toggle */}
                       <button
                         onClick={() => setExpandedEqId(expandedEqId === t.id ? null : t.id)}
                         className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors ${
@@ -225,6 +324,7 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
                           <ChevronDown className="w-2.5 h-2.5" />
                         )}
                       </button>
+
                       <button
                         onClick={() => startEdit(t)}
                         className="p-1 rounded text-slate-500 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -242,6 +342,27 @@ export const TransitionInspector: React.FC<TransitionInspectorProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* 32-Bar Phase Drift Mini-Heatmap with Spike Highlighting */}
+                <div className="mt-1.5 mb-2">
+                  <TransitionDriftHeatmap
+                    transition={t}
+                    phaseSync={phaseSync}
+                    currentTime={currentTime}
+                    onSeekToBarTime={onSeek}
+                  />
+                </div>
+
+                {/* Inline Expandable Phase Sync Waveform Inspector */}
+                {expandedPhaseId === t.id && (
+                  <div className="mt-2 mb-2">
+                    <PhaseSyncVisualizer
+                      transition={t}
+                      audioBuffer={audioBuffer}
+                      onUpdateTransition={onUpdateTransition}
+                    />
+                  </div>
+                )}
 
                 {/* Inline Expandable EQ Mud Cuts Drawer */}
                 {expandedEqId === t.id && (() => {

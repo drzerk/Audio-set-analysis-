@@ -19,6 +19,90 @@ export interface HarmonyPoint {
   confidence: number;
 }
 
+export type PhaseDriftRisk = 'locked' | 'mild-drift' | 'drift-prone' | 'critical-flam';
+
+export interface WaveformAlignmentData {
+  timeOffsetMs: number; // e.g. +11.4ms
+  timeLabels: number[]; // -50ms to +50ms (in ms)
+  deckA: number[]; // normalized transient amplitude of outgoing track (Deck A)
+  deckB: number[]; // normalized transient amplitude of incoming track (Deck B)
+  summedWaveform: number[]; // acoustic sum of both tracks (highlights constructive peak or destructive comb dip)
+  combFilterNotchesHz: number[]; // frequencies where phase cancellation occurs (e.g. [68, 136])
+}
+
+export interface DriftForecastStep {
+  bar: number; // e.g. 1, 4, 8, 16, 24, 32, 48, 64
+  timeSeconds: number; // elapsed seconds into the transition
+  driftMs: number; // cumulative phase drift in milliseconds
+  status: 'locked' | 'acceptable' | 'flamming' | 'trainwreck';
+  combCancellationPercent: number; // 0 to 100% destructive interference
+}
+
+export interface BarDriftHeatmapCell {
+  bar: number; // 1 to 32
+  phraseIndex: number; // 0 (bars 1-8), 1 (bars 9-16), 2 (bars 17-24), 3 (bars 25-32)
+  phraseName: string; // 'Intro Blend', 'Groove Build', 'Kick & Bass Swap', 'Outro Bleed'
+  timeOffsetSec: number; // elapsed seconds from start of transition
+  timestamp: number; // absolute set timestamp
+  driftMs: number; // signed drift in ms
+  absDriftMs: number; // absolute value in ms
+  driftSeverity: 'locked' | 'safe' | 'caution' | 'warning' | 'critical-spike';
+  intensity: number; // 0.0 to 1.0
+  isSpike: boolean; // whether this bar is inside a detected drift spike zone
+  combCancellationPercent: number; // 0 - 100%
+  combNotchHz?: number;
+  acousticRiskNote: string;
+}
+
+export interface DriftSpikeSegment {
+  startBar: number;
+  endBar: number;
+  peakDriftMs: number;
+  peakBar: number;
+  phraseNames: string[];
+  severity: 'warning' | 'critical';
+  description: string;
+  recommendedAction: string;
+}
+
+export interface Transition32BarDriftMap {
+  bars: BarDriftHeatmapCell[];
+  maxDriftMs: number;
+  peakDriftBar: number;
+  spikeSegments: DriftSpikeSegment[];
+  barsUntilAudibleFlam: number | null;
+  overallStatus: 'locked' | 'moderate-drift' | 'severe-spike';
+  kickSwapZoneDrift: number; // average drift in bars 17-24
+  averageDriftMs: number;
+}
+
+export interface PhaseNudgeAdvice {
+  direction: 'forward' | 'backward' | 'in-sync';
+  offsetMs: number;
+  jogWheelTicks: number; // CDJ jog wheel nudge ticks (approx 4-5ms per tick)
+  pitchBendPercent: number; // Pitch fader micro-adjustment (e.g. +0.14%)
+  driftWarningMessage: string;
+  hardwareCorrection: string; // Actionable hardware instruction (CDJ jog wheel / pitch bend)
+  phaseCancellationWarning?: string; // Guidance on low-end kick phase cancellation
+}
+
+export interface PhaseSyncAnalysis {
+  isDriftProne: boolean;
+  driftRisk: PhaseDriftRisk;
+  phaseCoherenceScore: number; // 0 - 100%
+  timeDeltaMs: number; // transient alignment offset in ms (-40ms to +40ms)
+  phaseAngleDeg: number; // 0° to 180°
+  tempoDeltaBpm: number; // toBpm - fromBpm
+  driftRateMsPerBar: number; // ms offset accumulation per 4/4 bar
+  barsUntilFlam: number; // bars before drift exceeds audible threshold (~14ms)
+  flamThresholdMs: number; // 14ms
+  subPhaseCancellationRisk: 'minimal' | 'moderate' | 'severe';
+  waveformAlignment: WaveformAlignmentData;
+  driftForecast: DriftForecastStep[];
+  nudgeAdvice: PhaseNudgeAdvice;
+  barDriftHeatmap?: Transition32BarDriftMap;
+}
+
 export interface TransitionItem {
   id: string;
   timestamp: number; // in seconds
@@ -33,6 +117,7 @@ export interface TransitionItem {
   toBpm: number;
   notes: string;
   type: 'seamless-blend' | 'cut-drop' | 'filter-sweep' | 'breakdown-swap';
+  phaseSyncAnalysis?: PhaseSyncAnalysis;
 }
 
 export interface PeakMoment {
@@ -113,6 +198,30 @@ export interface TechnoSetAnalysis {
   isCloudSynced: boolean;
   audioUrl?: string; // object URL or generated tone stream for playback
   customNotes?: string;
+  sourcePlatform?: 'file' | 'soundcloud' | 'hearthis' | 'mixcloud' | 'direct-stream';
+  sourceUrl?: string;
+  artistName?: string;
+  artworkUrl?: string;
+}
+
+export type StreamingPlatform = 'hearthis' | 'soundcloud' | 'mixcloud' | 'direct' | 'unknown';
+
+export interface StreamMetadataResult {
+  platform: StreamingPlatform;
+  title: string;
+  artist: string;
+  duration: number; // in seconds
+  artworkUrl?: string;
+  streamUrl?: string;
+  permalinkUrl?: string;
+  downloadable: boolean;
+  requiresProxy: boolean;
+  description?: string;
+  genre?: string;
+  bpm?: number;
+  tracklist?: Array<{ title: string; artist?: string; timestamp?: number }>;
+  note?: string;
+  error?: string;
 }
 
 export type BoothTheme = 'booth-dark' | 'red-stage-night' | 'cyan-laser';
@@ -266,6 +375,44 @@ export interface TransitionEqAdvice {
     rawCombinedDb: number;
     carvedCombinedDb: number;
     mudAccumulationDb: number;
+  }[];
+}
+
+export type EnergyGapSeverity = 'critical' | 'warning' | 'moderate';
+
+export interface EnergyGap {
+  id: string;
+  startTime: number;
+  endTime: number;
+  duration: number; // in seconds
+  minEnergy: number; // lowest point (0-100)
+  avgGapEnergy: number; // average energy during this gap
+  setAverageEnergy: number; // set average reference
+  energyDeficit: number; // setAverage - minEnergy
+  minSubBass: number; // lowest subBass during this gap
+  severity: EnergyGapSeverity;
+  severityScore: number; // 0 - 100 for heatmap coloring
+  crowdFlowImpact: string; // e.g. "Hohes Risiko: Tanzfläche verliert Momentum durch überlangen Breakdown"
+  actionableTip: string; // e.g. "Breakdown um 16 Takte kürzen oder Percussion/Hi-Hats früher einbringen"
+  peakTroughTime: number; // timestamp where the energy hits lowest trough
+}
+
+export interface EnergyGapAnalysisResult {
+  setAverageEnergy: number;
+  thresholdEnergy: number;
+  sensitivityMode: 'conservative' | 'standard' | 'aggressive';
+  gaps: EnergyGap[];
+  criticalGapsCount: number;
+  totalGapDuration: number; // total seconds spent in flow-deficit
+  gapPercentageOfSet: number; // percentage of set duration in gap
+  flowContinuityScore: number; // 0 - 100
+  heatmapTimeline: {
+    time: number;
+    energy: number;
+    deficit: number;
+    intensity: number; // 0 to 1
+    inGap: boolean;
+    gapId?: string;
   }[];
 }
 
