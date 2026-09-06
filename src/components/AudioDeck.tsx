@@ -11,12 +11,16 @@ import {
   Sliders,
   Flame,
   Zap,
-  Clock
+  Clock,
+  Disc3,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { TechnoSetAnalysis, TransitionItem, PeakMoment } from '../types';
 import { formatTimeSeconds } from '../utils/pdfExport';
 import { TechnoPreviewAudioEngine } from '../utils/audioAnalyzer';
 import { computeAutoTaggedSegments } from '../utils/segmentAutoTagger';
+import { PhaseDeltaWaveformOverlay } from './PhaseDeltaWaveformOverlay';
 
 interface AudioDeckProps {
   currentSet: TechnoSetAnalysis;
@@ -41,6 +45,8 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
   const [isLoopingTransition, setIsLoopingTransition] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(0.8);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [showPhaseDeltaOverlay, setShowPhaseDeltaOverlay] = useState<boolean>(true);
+  const [selectedTransitionId, setSelectedTransitionId] = useState<string | null>(null);
 
   const duration = currentSet.duration || 3600;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / duration) * 100));
@@ -58,6 +64,16 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
   // Find next transition and peak
   const nextTransition = currentSet.transitions.find((t) => t.timestamp > currentTime);
   const nextPeak = currentSet.peakMoments.find((p) => p.timestamp > currentTime);
+
+  // Active or upcoming transition to monitor for phase alignment
+  const activeTransition = currentSet.transitions.find(
+    (t) => currentTime >= t.timestamp - 10 && currentTime <= t.timestamp + (t.duration || 30)
+  );
+  const targetTransition =
+    (selectedTransitionId && currentSet.transitions.find((t) => t.id === selectedTransitionId)) ||
+    activeTransition ||
+    nextTransition ||
+    currentSet.transitions[0];
 
   const calculatedBpm = Math.round((currentSet.bpmAverage * (1 + pitchPercent / 100)) * 10) / 10;
 
@@ -135,6 +151,34 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
             <span className="text-slate-500 uppercase">DURATION</span>
             <span className="font-mono text-slate-300">{formatTimeSeconds(duration)}</span>
           </div>
+
+          {/* Phase Delta Waveform Overlay Toggle Button */}
+          {targetTransition && (
+            <button
+              id="btn-toggle-phase-delta-overlay"
+              onClick={() => setShowPhaseDeltaOverlay((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer ${
+                showPhaseDeltaOverlay
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm shadow-cyan-500/20'
+                  : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200'
+              }`}
+              title="Phase-Delta Sekundär-Waveform & Transient-Ausrichtung ein-/ausblenden"
+            >
+              <Disc3 className={`w-3 h-3 ${showPhaseDeltaOverlay ? 'text-cyan-400 animate-spin-slow' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline">PHASE-DELTA</span>
+              <span
+                className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                  (targetTransition.phaseScore || 85) >= 90
+                    ? 'bg-emerald-500/25 text-emerald-400'
+                    : (targetTransition.phaseScore || 85) >= 75
+                    ? 'bg-amber-500/25 text-amber-400'
+                    : 'bg-rose-500/25 text-rose-400'
+                }`}
+              >
+                {targetTransition.phaseScore || 85}%
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,23 +228,89 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
           {/* Transitions Overlay Markers on Waveform */}
           {currentSet.transitions.map((t) => {
             const leftPct = (t.timestamp / duration) * 100;
+            const isTarget = targetTransition && targetTransition.id === t.id;
             return (
               <div
                 key={t.id}
                 style={{ left: `${leftPct}%` }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  setSelectedTransitionId(t.id);
                   onJumpToTransition(t);
                 }}
-                className="absolute top-0 bottom-0 w-1 bg-blue-400/80 hover:w-2 hover:bg-blue-300 z-10 cursor-pointer group/trans transition-all"
-                title={`Übergang bei ${formatTimeSeconds(t.timestamp)} (Score: ${t.qualityScore}%)`}
+                className={`absolute top-0 bottom-0 z-10 cursor-pointer group/trans transition-all ${
+                  isTarget
+                    ? 'w-1.5 bg-cyan-400 shadow-[0_0_10px_#06b6d4]'
+                    : 'w-1 bg-blue-400/80 hover:w-2 hover:bg-blue-300'
+                }`}
+                title={`Übergang bei ${formatTimeSeconds(t.timestamp)} (Phase-Score: ${t.phaseScore || 85}%)`}
               >
                 <div className="hidden group-hover/trans:flex absolute -top-5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-blue-950 border border-blue-500 text-[9px] font-mono text-blue-200 rounded whitespace-nowrap z-20 shadow-md">
-                  MIX {formatTimeSeconds(t.timestamp)} • {t.qualityScore}%
+                  MIX {formatTimeSeconds(t.timestamp)} • Phase: {t.phaseScore || 85}%
                 </div>
               </div>
             );
           })}
+
+          {/* Secondary Track Blend & Phase Delta Waveform Zone on Timeline */}
+          {targetTransition && (
+            (() => {
+              const blendStart = Math.max(0, targetTransition.timestamp - 10);
+              const blendEnd = Math.min(duration, targetTransition.timestamp + (targetTransition.duration || 30));
+              const leftPct = (blendStart / duration) * 100;
+              const widthPct = Math.max(2, ((blendEnd - blendStart) / duration) * 100);
+              const isNow = currentTime >= blendStart && currentTime <= blendEnd;
+              const pScore = targetTransition.phaseScore || 85;
+              const isLocked = pScore >= 90;
+
+              return (
+                <div
+                  key={`timeline-blend-${targetTransition.id}`}
+                  style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTransitionId(targetTransition.id);
+                    onSeek(targetTransition.timestamp - 5);
+                  }}
+                  className={`absolute top-0 bottom-0 pointer-events-auto z-15 border-x transition-all group/blend ${
+                    isNow
+                      ? 'bg-cyan-500/20 border-cyan-400 shadow-[0_0_16px_rgba(6,182,212,0.35)]'
+                      : 'bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/15'
+                  }`}
+                  title={`Phase-Delta Mix-Zone: ${targetTransition.fromKey || '8A'} → ${targetTransition.toKey || '8A'} (${pScore}% Coherence)`}
+                >
+                  {/* Top Mini Phase Alignment Accuracy Cue Pill */}
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1 px-1.5 py-0.2 rounded bg-black/90 border border-cyan-500/50 text-[8px] font-mono whitespace-nowrap shadow-md z-20">
+                    <Disc3 className="w-2.5 h-2.5 text-cyan-400 animate-spin-slow" />
+                    <span className="text-cyan-300 font-bold">PHASE-DELTA</span>
+                    <span className={isLocked ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {pScore}%
+                    </span>
+                  </div>
+
+                  {/* Secondary Ghost Waveform Bars in Blend Zone (Track B Alignment Visual Cue) */}
+                  <div className="absolute inset-0 flex items-center justify-between px-0.5 gap-[1px] opacity-40 pointer-events-none">
+                    {Array.from({ length: 14 }).map((_, barIdx) => {
+                      const h = 35 + Math.sin(barIdx * 0.7) * 45;
+                      return (
+                        <div
+                          key={barIdx}
+                          className="flex-1 flex flex-col items-center justify-center h-full"
+                        >
+                          <div
+                            style={{ height: `${h}%` }}
+                            className={`w-full rounded-[1px] ${
+                              isLocked ? 'bg-emerald-400' : 'bg-amber-400'
+                            }`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()
+          )}
 
           {/* Peak Drops Overlay Markers */}
           {currentSet.peakMoments.map((p) => {
@@ -281,6 +391,18 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
         </div>
       </div>
 
+      {/* Secondary Phase Delta Waveform Overlay (Track-Alignment Visual Cue) */}
+      {showPhaseDeltaOverlay && targetTransition && (
+        <PhaseDeltaWaveformOverlay
+          transition={targetTransition}
+          allTransitions={currentSet.transitions}
+          currentTime={currentTime}
+          duration={duration}
+          onSelectTransition={(t) => setSelectedTransitionId(t.id)}
+          onSeek={onSeek}
+        />
+      )}
+
       {/* Primary Deck Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] border border-white/5 rounded p-2 sm:p-2.5">
         {/* Left: Quick Jump Cues & Segment Pills */}
@@ -288,7 +410,10 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
           {nextTransition ? (
             <button
               id="btn-jump-next-transition"
-              onClick={() => onJumpToTransition(nextTransition)}
+              onClick={() => {
+                setSelectedTransitionId(nextTransition.id);
+                onJumpToTransition(nextTransition);
+              }}
               className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded bg-blue-500/10 border border-blue-500/30 hover:border-blue-400 text-blue-300 transition-all cursor-pointer truncate"
               title={`Springe zu Übergang bei ${formatTimeSeconds(nextTransition.timestamp)}`}
             >

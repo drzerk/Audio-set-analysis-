@@ -416,3 +416,98 @@ export interface EnergyGapAnalysisResult {
   }[];
 }
 
+export type AutoMixGoal =
+  | 'balanced'
+  | 'energy-lift'
+  | 'hypnotic-flow'
+  | 'deep-grounding'
+  | 'relative-swap';
+
+export interface TrackLibraryItem {
+  id: string;
+  title: string;
+  artist: string;
+  label?: string;
+  bpm: number;
+  keyCamelot: string; // e.g. "8A", "9A", "8B"
+  keyNote: string; // e.g. "A-Moll", "E-Moll"
+  energy: number; // 0 to 100
+  subgenre:
+    | 'Peak-Time Raw'
+    | 'Hypnotic & Deep'
+    | 'Hard Techno'
+    | 'Acid Techno'
+    | 'Industrial'
+    | 'Groove / Detroit'
+    | 'Dark Minimal';
+  durationSec?: number;
+  introBars?: number; // e.g. 32
+  outroBars?: number; // e.g. 32
+  tags?: string[];
+  kickCharacter?: string; // e.g. "Punchy 909", "Deep Sub Rumble"
+  bassStyle?: string; // e.g. "Rolling 16th Sub", "Acid 303 Saw"
+  customNotes?: string;
+  isUserCustom?: boolean;
+}
+
+export interface AutoMixSuggestion {
+  track: TrackLibraryItem;
+  overallMatchScore: number; // 0 to 100
+  rank: number;
+  harmonicMatch: {
+    score: number; // 0 to 100
+    type:
+      | 'exact-match'
+      | 'energy-lift'
+      | 'deep-grounding'
+      | 'relative-swap'
+      | 'semitone-surge'
+      | 'diagonal-warmth'
+      | 'dissonant-tension';
+    typeLabel: string;
+    camelotDelta: number; // step difference (-6 to +6)
+    fromKey: string;
+    toKey: string;
+    description: string;
+  };
+  bpmMatch: {
+    score: number; // 0 to 100
+    fromBpm: number;
+    toBpm: number;
+    bpmDelta: number; // toBpm - fromBpm
+    pitchBendPercent: number; // percentage fader adjustment
+    pitchStatus: 'exact-pitch' | 'subtle-bend' | 'moderate-shift' | 'wide-shift';
+    statusLabel: string;
+    cdjPitchFaderAction: string;
+    cdjPitchRange: '±6%' | '±10%' | '±16%' | 'WIDE';
+  };
+  energyMatch: {
+    score: number; // 0 to 100
+    fromEnergy: number;
+    toEnergy: number;
+    energyDelta: number;
+    trajectory: 'escalate' | 'maintain' | 'de-escalate';
+    trajectoryLabel: string;
+  };
+  transitionStrategy: {
+    style: 'seamless-blend' | 'cut-drop' | 'filter-sweep' | 'breakdown-swap';
+    recommendedBars: 16 | 32 | 64;
+    recommendedDurationSec: number;
+    eqChoreography: string;
+    riskLevel: 'low' | 'medium' | 'high';
+    djDirectives: string;
+  };
+}
+
+export type AppWorkspaceTab = 'dashboard' | 'dynamics' | 'diagnosis' | 'assistant' | 'help';
+export type AppUserMode = 'simple' | 'pro';
+
+export interface SessionActivityItem {
+  id: string;
+  timestamp: string;
+  title: string;
+  type: 'info' | 'success' | 'warning' | 'action';
+  description?: string;
+  timeSeconds?: number;
+}
+

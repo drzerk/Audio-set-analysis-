@@ -1,5 +1,6 @@
-import { TechnoSetAnalysis } from '../types';
+import { TechnoSetAnalysis, TrackLibraryItem } from '../types';
 import { DEMO_SETS } from '../data/demoSets';
+import { DEFAULT_TRACK_LIBRARY } from '../data/trackLibrary';
 
 const DB_NAME = 'TechnoSetAnalyzerDB';
 const DB_VERSION = 1;
@@ -162,5 +163,66 @@ export async function loadSetFromCloud(id: string): Promise<TechnoSetAnalysis | 
   } catch (err) {
     console.error('Failed to load from cloud:', err);
     return null;
+  }
+}
+
+// User Track Library Storage
+const TRACK_LIB_KEY = 'techno_dj_track_library_v1';
+
+export async function getUserTrackLibrary(): Promise<TrackLibraryItem[]> {
+  try {
+    const raw = localStorage.getItem(TRACK_LIB_KEY);
+    if (!raw) {
+      localStorage.setItem(TRACK_LIB_KEY, JSON.stringify(DEFAULT_TRACK_LIBRARY));
+      return DEFAULT_TRACK_LIBRARY;
+    }
+    const parsed = JSON.parse(raw) as TrackLibraryItem[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return DEFAULT_TRACK_LIBRARY;
+    }
+    return parsed;
+  } catch (err) {
+    console.warn('Could not read track library from localStorage:', err);
+    return DEFAULT_TRACK_LIBRARY;
+  }
+}
+
+export async function saveUserTrackItem(track: TrackLibraryItem): Promise<TrackLibraryItem[]> {
+  try {
+    const library = await getUserTrackLibrary();
+    const existingIndex = library.findIndex((t) => t.id === track.id);
+    let updated: TrackLibraryItem[];
+    if (existingIndex >= 0) {
+      updated = [...library];
+      updated[existingIndex] = track;
+    } else {
+      updated = [track, ...library];
+    }
+    localStorage.setItem(TRACK_LIB_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    console.error('Error saving user track item:', err);
+    return DEFAULT_TRACK_LIBRARY;
+  }
+}
+
+export async function deleteUserTrackItem(trackId: string): Promise<TrackLibraryItem[]> {
+  try {
+    const library = await getUserTrackLibrary();
+    const updated = library.filter((t) => t.id !== trackId);
+    localStorage.setItem(TRACK_LIB_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    console.error('Error deleting track from library:', err);
+    return DEFAULT_TRACK_LIBRARY;
+  }
+}
+
+export async function resetUserTrackLibrary(): Promise<TrackLibraryItem[]> {
+  try {
+    localStorage.setItem(TRACK_LIB_KEY, JSON.stringify(DEFAULT_TRACK_LIBRARY));
+    return DEFAULT_TRACK_LIBRARY;
+  } catch {
+    return DEFAULT_TRACK_LIBRARY;
   }
 }
