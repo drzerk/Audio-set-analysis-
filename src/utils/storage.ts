@@ -74,19 +74,66 @@ async function saveInitialDemoSets(): Promise<TechnoSetAnalysis[]> {
 export async function saveLocalSet(set: TechnoSetAnalysis): Promise<void> {
   try {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.put(set);
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(set);
+      req.onerror = () => reject(req.error || new Error('Failed to put record into IndexedDB store'));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction error'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
     });
 
     // Also backup summary in localStorage for safety
-    const brief = { id: set.id, name: set.name, updatedAt: set.updatedAt };
+    const brief = {
+      id: set.id,
+      name: set.name,
+      updatedAt: set.updatedAt,
+      bpmAverage: set.bpmAverage,
+      dominantKey: set.dominantKey
+    };
     localStorage.setItem(`set_brief_${set.id}`, JSON.stringify(brief));
+
+    // Keep fallback list updated
+    try {
+      const existing = localStorage.getItem('techno_sets_backup');
+      let list: TechnoSetAnalysis[] = existing ? JSON.parse(existing) : [];
+      const idx = list.findIndex((s) => s.id === set.id);
+      if (idx >= 0) {
+        list[idx] = set;
+      } else {
+        list = [set, ...list];
+      }
+      localStorage.setItem('techno_sets_backup', JSON.stringify(list.slice(0, 8)));
+    } catch {
+      // Ignore quota limit for deep audio points
+    }
   } catch (err) {
     console.error('Failed to save to IndexedDB', err);
+    try {
+      const brief = { id: set.id, name: set.name, updatedAt: set.updatedAt };
+      localStorage.setItem(`set_brief_${set.id}`, JSON.stringify(brief));
+    } catch {
+      // ignore
+    }
+    // Re-throw if caller wants to know, or keep resolved
+    throw err;
+  }
+}
+
+export async function getLocalSetById(id: string): Promise<TechnoSetAnalysis | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(id);
+      req.onsuccess = () => resolve((req.result as TechnoSetAnalysis) || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error('Error fetching set from IndexedDB by id', err);
+    return null;
   }
 }
 

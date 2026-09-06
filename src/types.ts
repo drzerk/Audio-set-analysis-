@@ -117,6 +117,9 @@ export interface TransitionItem {
   toBpm: number;
   notes: string;
   type: 'seamless-blend' | 'cut-drop' | 'filter-sweep' | 'breakdown-swap';
+  isTagged?: boolean;
+  tag?: string;
+  tags?: string[];
   phaseSyncAnalysis?: PhaseSyncAnalysis;
 }
 

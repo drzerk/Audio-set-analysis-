@@ -11,6 +11,7 @@ import {
   getCamelotColor
 } from '../utils/harmonicEnergyClashDetector';
 import { formatTimeSeconds } from '../utils/pdfExport';
+import { generateSmoothSvgPath } from '../utils/curveUtils';
 import {
   Zap,
   AlertTriangle,
@@ -136,28 +137,24 @@ export const HarmonicEnergyConflictVisualizer: React.FC<HarmonicEnergyConflictVi
       ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
       : 'bg-rose-500/10 text-rose-400 border-rose-500/30';
 
-  // SVG path for energy curve
+  // SVG path for energy curve with smooth spline interpolation
   const energyPathData = useMemo(() => {
     if (!harmonicMomentumTrend || harmonicMomentumTrend.length === 0) return '';
-    return harmonicMomentumTrend
-      .map((p, idx) => {
-        const x = (p.time / duration) * 100;
-        const y = 100 - p.energy;
-        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-      })
-      .join(' ');
+    const coords = harmonicMomentumTrend.map((p) => ({
+      x: (p.time / duration) * 100,
+      y: Math.max(2, Math.min(98, 100 - p.energy))
+    }));
+    return generateSmoothSvgPath(coords, 0.2);
   }, [harmonicMomentumTrend, duration]);
 
-  // SVG path for tension index
+  // SVG path for tension index with smooth spline interpolation
   const tensionPathData = useMemo(() => {
     if (!harmonicMomentumTrend || harmonicMomentumTrend.length === 0) return '';
-    return harmonicMomentumTrend
-      .map((p, idx) => {
-        const x = (p.time / duration) * 100;
-        const y = 100 - Math.min(100, Math.max(0, p.harmonicTensionIndex));
-        return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-      })
-      .join(' ');
+    const coords = harmonicMomentumTrend.map((p) => ({
+      x: (p.time / duration) * 100,
+      y: Math.max(2, Math.min(98, 100 - Math.min(100, Math.max(0, p.harmonicTensionIndex))))
+    }));
+    return generateSmoothSvgPath(coords, 0.2);
   }, [harmonicMomentumTrend, duration]);
 
   return (
@@ -331,9 +328,16 @@ export const HarmonicEnergyConflictVisualizer: React.FC<HarmonicEnergyConflictVi
               <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="clashEnergyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ec4899" stopOpacity="0.35" />
+                    <stop offset="0%" stopColor="#ec4899" stopOpacity="0.38" />
+                    <stop offset="50%" stopColor="#ec4899" stopOpacity="0.12" />
                     <stop offset="100%" stopColor="#ec4899" stopOpacity="0.0" />
                   </linearGradient>
+                  <filter id="clashEnergyGlow" x="-10%" y="-10%" width="120%" height="120%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="0.8" floodColor="#ec4899" floodOpacity="0.8" />
+                  </filter>
+                  <filter id="tensionGlow" x="-10%" y="-10%" width="120%" height="120%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="0.8" floodColor="#c084fc" floodOpacity="0.8" />
+                  </filter>
                 </defs>
 
                 {/* Shaded Area under Energy */}
@@ -344,7 +348,8 @@ export const HarmonicEnergyConflictVisualizer: React.FC<HarmonicEnergyConflictVi
                   d={energyPathData}
                   fill="none"
                   stroke="#ec4899"
-                  strokeWidth="2"
+                  strokeWidth="2.2"
+                  filter="url(#clashEnergyGlow)"
                   vectorEffect="non-scaling-stroke"
                 />
 
@@ -352,9 +357,10 @@ export const HarmonicEnergyConflictVisualizer: React.FC<HarmonicEnergyConflictVi
                 <path
                   d={tensionPathData}
                   fill="none"
-                  stroke="#a855f7"
-                  strokeWidth="1.2"
-                  strokeDasharray="2,2"
+                  stroke="#c084fc"
+                  strokeWidth="1.6"
+                  strokeDasharray="2.5,2.5"
+                  filter="url(#tensionGlow)"
                   vectorEffect="non-scaling-stroke"
                 />
               </svg>

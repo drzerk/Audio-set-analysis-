@@ -29,7 +29,7 @@ import {
   SessionActivityItem
 } from '../types';
 import { AudioDeck } from './AudioDeck';
-import { QuickSetupChecklist } from './QuickSetupChecklist';
+import { QuickSetupTracker } from './QuickSetupTracker';
 import { formatTimeSeconds } from '../utils/pdfExport';
 
 interface ExecutiveDashboardProps {
@@ -48,6 +48,7 @@ interface ExecutiveDashboardProps {
   userMode: AppUserMode;
   onToggleUserMode: () => void;
   activityLog: SessionActivityItem[];
+  onUpdateTransition?: (updated: TransitionItem) => void;
 }
 
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
@@ -65,7 +66,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   onOpenTour,
   userMode,
   onToggleUserMode,
-  activityLog
+  activityLog,
+  onUpdateTransition
 }) => {
   const duration = currentSet.duration || 3600;
 
@@ -140,7 +142,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   return (
     <div id="executive-dashboard-view" className="flex flex-col gap-3.5 w-full">
-      {/* 1. "WAS PASSIERT GERADE?" Live Status Ribbon */}
+      {/* 1. QUICK SETUP TRACKER (3-Step Horizontal Progress Tracker) */}
+      <QuickSetupTracker
+        className="mb-6"
+        currentSet={currentSet}
+        onOpenUpload={onOpenUpload}
+        onSelectTab={onSelectTab}
+        onJumpToTransition={onJumpToTransition}
+        onTogglePlay={onTogglePlay}
+        isPlaying={isPlaying}
+        onUpdateTransition={onUpdateTransition}
+      />
+
+      {/* 2. "WAS PASSIERT GERADE?" Live Status Ribbon */}
       <div
         id="live-app-status-ribbon"
         className="w-full bg-[#0d1017] border border-emerald-500/20 rounded-xl p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg relative overflow-hidden"
@@ -197,17 +211,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </button>
         </div>
       </div>
-
-      {/* 2. QUICK SETUP PROGRESS CHECKLIST (Interactive 3-Step Tracker) */}
-      <QuickSetupChecklist
-        currentSet={currentSet}
-        onOpenUpload={onOpenUpload}
-        onSelectTab={onSelectTab}
-        onJumpToTransition={onJumpToTransition}
-        onTogglePlay={onTogglePlay}
-        isPlaying={isPlaying}
-        onExportPdf={onExportPdf}
-      />
 
       {/* 3. PRIORITY HEALTH METRICS (4 Clean Cards with Progressive Disclosure) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">

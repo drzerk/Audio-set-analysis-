@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { computeAutoTaggedSegments } from '../utils/segmentAutoTagger';
 import { detectEnergyGaps, getGapSeverityColors } from '../utils/energyGapDetector';
+import { generateSmoothSvgPath } from '../utils/curveUtils';
 
 interface BpmHarmonicChartProps {
   currentSet: TechnoSetAnalysis;
@@ -108,28 +109,27 @@ export const BpmHarmonicChart: React.FC<BpmHarmonicChartProps> = ({
     onSeek(targetTime);
   };
 
-  // Build SVG path for BPM curve
+  // Build SVG path for BPM curve with smooth spline interpolation
   const bpmPointsSorted = [...currentSet.bpmPoints].sort((a, b) => a.time - b.time);
-  const bpmPathData = bpmPointsSorted.map((p, idx) => {
-    const x = (p.time / duration) * 100;
-    // Invert y: higher BPM at the top
-    const y = 100 - ((p.bpm - minBpm) / bpmRange) * 100;
-    return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
+  const bpmCoords = bpmPointsSorted.map((p) => ({
+    x: (p.time / duration) * 100,
+    y: Math.max(2, Math.min(98, 100 - ((p.bpm - minBpm) / bpmRange) * 100))
+  }));
+  const bpmPathData = generateSmoothSvgPath(bpmCoords, 0.2);
 
-  // Build SVG path for Energy curve
+  // Build SVG path for Energy curve with smooth spline interpolation
   const energyPointsSorted = [...currentSet.energyPoints].sort((a, b) => a.time - b.time);
-  const energyPathData = energyPointsSorted.map((p, idx) => {
-    const x = (p.time / duration) * 100;
-    const y = 100 - p.energy;
-    return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
+  const energyCoords = energyPointsSorted.map((p) => ({
+    x: (p.time / duration) * 100,
+    y: Math.max(2, Math.min(98, 100 - p.energy))
+  }));
+  const energyPathData = generateSmoothSvgPath(energyCoords, 0.2);
 
-  const subBassPathData = energyPointsSorted.map((p, idx) => {
-    const x = (p.time / duration) * 100;
-    const y = 100 - p.subBass;
-    return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
+  const subBassCoords = energyPointsSorted.map((p) => ({
+    x: (p.time / duration) * 100,
+    y: Math.max(2, Math.min(98, 100 - p.subBass))
+  }));
+  const subBassPathData = generateSmoothSvgPath(subBassCoords, 0.2);
 
   return (
     <div
@@ -263,21 +263,26 @@ export const BpmHarmonicChart: React.FC<BpmHarmonicChartProps> = ({
             >
               <defs>
                 <linearGradient id="bpmGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.38" />
+                  <stop offset="60%" stopColor="#2563eb" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.0" />
                 </linearGradient>
+                <filter id="bpmLineGlow" x="-10%" y="-10%" width="120%" height="120%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="0.8" floodColor="#38bdf8" floodOpacity="0.75" />
+                </filter>
               </defs>
               {/* Fill area under curve */}
               <path
                 d={`${bpmPathData} L 100 100 L 0 100 Z`}
                 fill="url(#bpmGrad)"
               />
-              {/* Stroke line */}
+              {/* Stroke line with smooth curve & neon glow */}
               <path
                 d={bpmPathData}
                 fill="none"
-                stroke="#3b82f6"
-                strokeWidth="2"
+                stroke="#38bdf8"
+                strokeWidth="2.2"
+                filter="url(#bpmLineGlow)"
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
@@ -340,7 +345,38 @@ export const BpmHarmonicChart: React.FC<BpmHarmonicChartProps> = ({
                 <pattern id="critStripes" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
                   <line x1="0" y1="0" x2="0" y2="6" stroke="#f43f5e" strokeWidth="1.2" strokeOpacity="0.25" />
                 </pattern>
+                {/* Energy curve ambient area fill */}
+                <linearGradient id="overallEnergyAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ec4899" stopOpacity="0.32" />
+                  <stop offset="50%" stopColor="#ec4899" stopOpacity="0.10" />
+                  <stop offset="100%" stopColor="#ec4899" stopOpacity="0.0" />
+                </linearGradient>
+                {/* SubBass ambient area fill */}
+                <linearGradient id="subBassAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.25" />
+                  <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.08" />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                </linearGradient>
+                {/* Neon Glow Filters */}
+                <filter id="energyGlowFilter" x="-10%" y="-10%" width="120%" height="120%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="0.9" floodColor="#ec4899" floodOpacity="0.8" />
+                </filter>
+                <filter id="subBassGlowFilter" x="-10%" y="-10%" width="120%" height="120%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="0.7" floodColor="#f59e0b" floodOpacity="0.75" />
+                </filter>
               </defs>
+
+              {/* Energy curve area under curve */}
+              <path
+                d={`${energyPathData} L 100 100 L 0 100 Z`}
+                fill="url(#overallEnergyAreaGrad)"
+              />
+
+              {/* Sub-Bass area under curve */}
+              <path
+                d={`${subBassPathData} L 100 100 L 0 100 Z`}
+                fill="url(#subBassAreaGrad)"
+              />
 
               {/* Energy-Gap Heatmap Zones */}
               {showEnergyGapOverlay && gapAnalysis.gaps.map((gap) => {
@@ -428,8 +464,9 @@ export const BpmHarmonicChart: React.FC<BpmHarmonicChartProps> = ({
                 d={subBassPathData}
                 fill="none"
                 stroke="#f59e0b"
-                strokeWidth="1.5"
+                strokeWidth="1.8"
                 strokeDasharray="2,2"
+                filter="url(#subBassGlowFilter)"
                 vectorEffect="non-scaling-stroke"
               />
               {/* Overall Energy curve */}
@@ -437,7 +474,8 @@ export const BpmHarmonicChart: React.FC<BpmHarmonicChartProps> = ({
                 d={energyPathData}
                 fill="none"
                 stroke="#ec4899"
-                strokeWidth="2"
+                strokeWidth="2.4"
+                filter="url(#energyGlowFilter)"
                 vectorEffect="non-scaling-stroke"
               />
             </svg>

@@ -184,6 +184,25 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
 
       {/* Waveform & Cue Marker Timeline */}
       <div className="relative">
+        {/* CDJ 3-Band Frequency Legend */}
+        <div className="flex justify-between items-center text-[9px] font-mono text-slate-500 mb-1 px-1">
+          <div className="flex items-center gap-2.5">
+            <span className="text-white font-bold uppercase tracking-wider">3-BAND FREQUENZ-WAVEFORM</span>
+            <div className="flex items-center gap-2 text-[8px]">
+              <span className="flex items-center gap-1 text-sky-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> HI (Hi-Hats/Air)
+              </span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> MID (Synths/Snare)
+              </span>
+              <span className="flex items-center gap-1 text-rose-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> LOW (Kick/Sub)
+              </span>
+            </div>
+          </div>
+          <span className="text-slate-400 hidden sm:inline">PIONEER CDJ-3000 RGB DISPLAY</span>
+        </div>
+
         {/* Waveform Bar Canvas / Representation */}
         <div
           id="deck-waveform-track"
@@ -193,31 +212,71 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
             const newTime = (clickX / rect.width) * duration;
             onSeek(Math.max(0, Math.min(duration, newTime)));
           }}
-          className="h-24 sm:h-28 bg-[#0A0A0B] border border-white/5 rounded relative overflow-hidden cursor-pointer group select-none flex items-center"
+          className="h-24 sm:h-28 bg-[#09090B] border border-white/10 rounded relative overflow-hidden cursor-pointer group select-none flex items-center shadow-inner"
         >
-          {/* Waveform frequency bars matching High Density theme (blue-500 & pink-500) */}
-          <div className="absolute inset-0 flex items-center justify-between px-1 gap-[1px]">
+          {/* Subtle Beatgrid / Measure Ticks in Background */}
+          <div className="absolute inset-0 flex justify-between pointer-events-none opacity-15">
+            {Array.from({ length: 32 }).map((_, tickIdx) => (
+              <div
+                key={tickIdx}
+                className={`h-full ${tickIdx % 4 === 0 ? 'w-[1px] bg-white opacity-40' : 'w-[1px] bg-slate-500 opacity-20'}`}
+              />
+            ))}
+          </div>
+
+          {/* Center Zero-Crossing Reference Line */}
+          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-white/15 pointer-events-none" />
+
+          {/* Authentic 3-Band RGB Waveform Bars */}
+          <div className="absolute inset-0 flex items-center justify-between px-1 gap-[1.5px]">
             {currentSet.energyPoints.map((pt, i) => {
-              const heightPct = Math.max(16, Math.min(96, pt.energy * 0.95));
               const isPast = pt.time <= currentTime;
               const isPeakDrop = pt.energy > 88 || pt.subBass > 85;
+
+              // High frequency envelope (sky/cyan)
+              const highHeight = Math.max(14, Math.min(96, pt.energy * 0.94));
+              // Mid frequency envelope (amber/gold)
+              const midHeight = Math.max(10, Math.min(84, (pt.energy * 0.65) + (pt.subBass * 0.2)));
+              // Low frequency core punch (rose/crimson)
+              const lowHeight = Math.max(8, Math.min(76, pt.subBass * 0.88));
 
               return (
                 <div
                   key={i}
-                  className="flex-1 flex flex-col items-center justify-center h-full"
-                  title={`${formatTimeSeconds(pt.time)}: Energie ${pt.energy}%, Sub ${pt.subBass}%`}
+                  className="flex-1 flex flex-col items-center justify-center h-full relative group/bar"
+                  title={`${formatTimeSeconds(pt.time)}: Energie ${pt.energy}%, Sub-Bass ${pt.subBass}%`}
                 >
+                  {/* High Band (Outer cyan silhouette) */}
                   <div
-                    style={{ height: `${heightPct}%` }}
-                    className={`w-full rounded-[1px] transition-all duration-150 ${
+                    style={{ height: `${highHeight}%` }}
+                    className={`w-full rounded-[1px] transition-all duration-100 ${
+                      isPast
+                        ? 'bg-sky-400 opacity-90'
+                        : 'bg-sky-500/40 group-hover/bar:bg-sky-400'
+                    }`}
+                  />
+
+                  {/* Mid Band (Inner amber body) */}
+                  <div
+                    style={{ height: `${midHeight}%` }}
+                    className={`w-[85%] absolute rounded-[1px] pointer-events-none transition-all duration-100 ${
+                      isPast
+                        ? 'bg-amber-400 opacity-95'
+                        : 'bg-amber-500/60 group-hover/bar:bg-amber-400'
+                    }`}
+                  />
+
+                  {/* Low Band (Dense crimson punch core) */}
+                  <div
+                    style={{ height: `${lowHeight}%` }}
+                    className={`w-[68%] absolute rounded-[1px] pointer-events-none transition-all duration-100 ${
                       isPast
                         ? isPeakDrop
-                          ? 'bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.5)]'
-                          : 'bg-emerald-500 opacity-90'
+                          ? 'bg-rose-500 opacity-100 shadow-[0_0_8px_rgba(244,63,94,0.8)]'
+                          : 'bg-rose-500 opacity-95'
                         : isPeakDrop
-                        ? 'bg-pink-500/70 group-hover:bg-pink-400'
-                        : 'bg-blue-500/60 group-hover:bg-blue-400'
+                        ? 'bg-rose-500/80 group-hover/bar:bg-rose-400 shadow-[0_0_4px_rgba(244,63,94,0.4)]'
+                        : 'bg-rose-600/60 group-hover/bar:bg-rose-500'
                     }`}
                   />
                 </div>

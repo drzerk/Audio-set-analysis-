@@ -409,7 +409,7 @@ export async function downloadAndAnalyzeStream(
 ): Promise<TechnoSetAnalysis> {
   onProgress?.('Verbinde mit Audio-Stream...', 5);
 
-  const proxyUrl = `/api/stream/proxy?url=${encodeURIComponent(streamUrl)}`;
+  const proxyUrl = streamUrl.startsWith('/api/') ? streamUrl : `/api/stream/proxy?url=${encodeURIComponent(streamUrl)}`;
   const response = await fetch(proxyUrl);
   if (!response.ok) {
     throw new Error(`Audio-Stream konnte nicht geladen werden (HTTP ${response.status})`);

@@ -25,7 +25,16 @@ export interface StreamMetadataResult {
 let cachedSoundcloudClientId: string | null = null;
 let lastClientScrapeTime = 0;
 
-export async function getSoundcloudClientId(): Promise<string | null> {
+// Known fallback public client_ids if scraping fails
+const KNOWN_SOUNDCLOUD_CLIENT_IDS = [
+  'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo',
+  'a3e059563d7fd3372b49b37f00a00bcf',
+  '2t9loNfhTw4fhqqdgRqHGbcFdSl52do1',
+  'iZIs9mchVcX5lhVR1EzGCcyddKLC1EBu',
+  'bUdM8n3oYfP5p0kX0Mqv2r1iJ1i3l1d0'
+];
+
+export async function getSoundcloudClientId(): Promise<string> {
   const now = Date.now();
   // Cache for 4 hours
   if (cachedSoundcloudClientId && now - lastClientScrapeTime < 4 * 60 * 60 * 1000) {
@@ -63,7 +72,7 @@ export async function getSoundcloudClientId(): Promise<string | null> {
   }
 
   // Known fallback public client_id if scraping fails
-  return cachedSoundcloudClientId || 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
+  return cachedSoundcloudClientId || KNOWN_SOUNDCLOUD_CLIENT_IDS[0];
 }
 
 /**
@@ -164,115 +173,231 @@ async function resolveHearthis(url: string): Promise<StreamMetadataResult> {
 
 /**
  * SoundCloud Resolver
+ * Uses official API v2 resolve, direct track lookups, and progressive/HLS streaming transcodings.
  */
 async function resolveSoundcloud(url: string): Promise<StreamMetadataResult> {
   try {
-    // Follow potential shortlinks (on.soundcloud.com)
-    let targetUrl = url;
-    if (url.includes('on.soundcloud.com')) {
-      const head = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } });
-      targetUrl = head.url;
+    // 1. Follow shortlinks and normalize URL
+    let targetUrl = url.trim();
+    if (targetUrl.includes('on.soundcloud.com') || targetUrl.includes('m.soundcloud.com')) {
+      try {
+        const head = await fetch(targetUrl, {
+          redirect: 'follow',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        if (head.url) {
+          targetUrl = head.url;
+        }
+      } catch (e) {
+        console.warn('[SoundCloud Resolver] Error following shortlink:', e);
+      }
     }
 
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      }
-    });
+    // Strip social sharing tracking query params (e.g. ?si=..., utm_...)
+    const cleanUrl = targetUrl.split('?')[0];
+    const clientId = await getSoundcloudClientId();
 
-    const html = await res.text();
-    const hydrationMatch = html.match(/window\.__sc_hydration\s*=\s*(\[.*?\]);/s);
-
-    if (hydrationMatch) {
-      const hydrationData = JSON.parse(hydrationMatch[1]);
-      const soundObj = hydrationData.find(
-        (item: any) => item.hydratable === 'sound' || item.data?.media
-      )?.data;
-
-      if (soundObj) {
-        const title = soundObj.title || 'SoundCloud Track';
-        const artist = soundObj.user?.username || 'SoundCloud Artist';
-        const duration = Math.round((soundObj.duration || 0) / 1000);
-        const artworkUrl = soundObj.artwork_url?.replace('-large', '-t500x500') || soundObj.user?.avatar_url;
-        const permalinkUrl = soundObj.permalink_url || targetUrl;
-
-        // Find progressive mp3 stream or HLS stream
-        const transcodings = soundObj.media?.transcodings || [];
-        const progressiveTranscoding = transcodings.find(
-          (t: any) => t.format?.protocol === 'progressive' || t.preset?.includes('mp3')
-        );
-
-        if (progressiveTranscoding) {
-          const clientId = await getSoundcloudClientId();
-          if (clientId) {
-            const mediaRes = await fetch(`${progressiveTranscoding.url}?client_id=${clientId}`);
-            if (mediaRes.ok) {
-              const mediaData = await mediaRes.json();
-              if (mediaData.url) {
-                return {
-                  platform: 'soundcloud',
-                  title,
-                  artist,
-                  duration,
-                  artworkUrl,
-                  streamUrl: mediaData.url,
-                  permalinkUrl,
-                  downloadable: true,
-                  requiresProxy: true,
-                  genre: soundObj.genre,
-                  description: soundObj.description
-                };
-              }
+    // Helper to fetch from SoundCloud API with fallback client IDs
+    const fetchScApi = async (endpoint: string) => {
+      const clientIdsToTry = [clientId, ...KNOWN_SOUNDCLOUD_CLIENT_IDS.filter((id) => id !== clientId)];
+      for (const id of clientIdsToTry) {
+        try {
+          const sep = endpoint.includes('?') ? '&' : '?';
+          const apiUrl = `${endpoint}${sep}client_id=${id}`;
+          const res = await fetch(apiUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
+          });
+          if (res.ok) {
+            return { data: await res.json(), usedClientId: id };
+          }
+        } catch (e) {
+          // try next
+        }
+      }
+      return null;
+    };
+
+    let scData: any = null;
+    let activeClientId = clientId;
+
+    // 2. Primary approach: resolve track/playlist by canonical URL
+    const resolveResult = await fetchScApi(
+      `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(cleanUrl)}`
+    );
+
+    if (resolveResult) {
+      scData = resolveResult.data;
+      activeClientId = resolveResult.usedClientId;
+    }
+
+    // 3. Fallback approach: fetch page HTML to extract track/sound ID if direct URL resolve returned 404
+    if (!scData) {
+      try {
+        const pageRes = await fetch(targetUrl, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        const html = await pageRes.text();
+
+        // Extract ID from mobile app meta tags or sound links
+        const idMatch =
+          html.match(/soundcloud:\/\/(?:sounds|tracks):([0-9]+)/) ||
+          html.match(/<meta property="(?:al:ios:url|al:android:url)" content="soundcloud:\/\/(?:sounds|tracks):([0-9]+)"/i) ||
+          html.match(/tracks%2F([0-9]+)/) ||
+          html.match(/api-v2\.soundcloud\.com\/tracks\/([0-9]+)/);
+
+        if (idMatch && idMatch[1]) {
+          const trackResult = await fetchScApi(`https://api-v2.soundcloud.com/tracks/${idMatch[1]}`);
+          if (trackResult) {
+            scData = trackResult.data;
+            activeClientId = trackResult.usedClientId;
           }
         }
-
-        return {
-          platform: 'soundcloud',
-          title,
-          artist,
-          duration,
-          artworkUrl,
-          permalinkUrl,
-          downloadable: false,
-          requiresProxy: true,
-          error: 'SoundCloud Stream ist durch Rechteinhaber oder Format-Beschränkung geschützt.'
-        };
+      } catch (pageErr) {
+        console.warn('[SoundCloud Resolver] HTML scrape fallback error:', pageErr);
       }
     }
 
-    // Fallback: oEmbed
-    const oembedRes = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(targetUrl)}`);
+    // If we have track or playlist data
+    if (scData) {
+      // If it's a playlist or DJ set series, extract primary track or overview
+      let trackObj = scData;
+      let isPlaylist = false;
+      if (scData.kind === 'playlist') {
+        isPlaylist = true;
+        if (scData.tracks && scData.tracks.length > 0) {
+          // If first track has full media info, use it, while preserving playlist title
+          trackObj = scData.tracks[0].media ? scData.tracks[0] : scData;
+        }
+      }
+
+      const title = scData.title || trackObj.title || 'SoundCloud Techno Set';
+      const artist =
+        scData.user?.username ||
+        scData.user?.full_name ||
+        trackObj.user?.username ||
+        'SoundCloud Artist';
+      const duration = Math.round((trackObj.duration || scData.duration || 0) / 1000);
+      const artworkUrl =
+        scData.artwork_url?.replace('-large', '-t500x500') ||
+        trackObj.artwork_url?.replace('-large', '-t500x500') ||
+        scData.user?.avatar_url ||
+        trackObj.user?.avatar_url;
+      const permalinkUrl = scData.permalink_url || trackObj.permalink_url || targetUrl;
+      const genre = scData.genre || trackObj.genre || 'Techno';
+      const description = scData.description || trackObj.description || '';
+
+      const transcodings: any[] = trackObj.media?.transcodings || [];
+
+      // Priority 1: Progressive MP3 stream (fastest, direct seeking)
+      const progressiveTranscoding = transcodings.find(
+        (t) =>
+          t.format?.protocol === 'progressive' &&
+          (t.preset?.includes('mp3') || t.format?.mime_type?.includes('mpeg'))
+      ) || transcodings.find((t) => t.format?.protocol === 'progressive');
+
+      if (progressiveTranscoding) {
+        const streamResult = await fetchScApi(progressiveTranscoding.url);
+        if (streamResult?.data?.url) {
+          return {
+            platform: 'soundcloud',
+            title,
+            artist,
+            duration,
+            artworkUrl,
+            streamUrl: streamResult.data.url,
+            permalinkUrl,
+            downloadable: true,
+            requiresProxy: true,
+            genre,
+            description,
+            note: isPlaylist ? 'Playlist/Set erkannt: Stream des ersten Sets geladen.' : undefined
+          };
+        }
+      }
+
+      // Priority 2: HLS Stream (supported via our chunked HLS proxy)
+      const hlsTranscoding = transcodings.find(
+        (t) =>
+          t.format?.protocol === 'hls' &&
+          (t.preset?.includes('mp3') || t.format?.mime_type?.includes('mpeg'))
+      ) || transcodings.find((t) => t.format?.protocol === 'hls');
+
+      if (hlsTranscoding) {
+        const streamResult = await fetchScApi(hlsTranscoding.url);
+        if (streamResult?.data?.url) {
+          return {
+            platform: 'soundcloud',
+            title,
+            artist,
+            duration,
+            artworkUrl,
+            // Route through our dedicated HLS proxy for continuous streaming
+            streamUrl: `/api/stream/proxy-hls?url=${encodeURIComponent(streamResult.data.url)}`,
+            permalinkUrl,
+            downloadable: true,
+            requiresProxy: false, // Already routed through internal proxy
+            genre,
+            description,
+            note: 'HLS Audio-Stream erfolgreich bereitgestellt.'
+          };
+        }
+      }
+
+      // If metadata was found but stream is DRM/Go+ protected
+      return {
+        platform: 'soundcloud',
+        title,
+        artist,
+        duration,
+        artworkUrl,
+        permalinkUrl,
+        downloadable: false,
+        requiresProxy: true,
+        genre,
+        description,
+        note: 'Track-Informationen gefunden, der Stream ist jedoch durch SoundCloud Go+ oder Rechteinhaber beschränkt.',
+        error: 'SoundCloud Stream ist durch Rechteinhaber oder Go+ beschränkt. Du kannst das Set stattdessen als lokale MP3 hochladen.'
+      };
+    }
+
+    // 4. Final Fallback: oEmbed
+    const oembedRes = await fetch(
+      `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(targetUrl)}`
+    );
     if (oembedRes.ok) {
       const oembed = await oembedRes.json();
       return {
         platform: 'soundcloud',
-        title: oembed.title || 'SoundCloud Track',
+        title: oembed.title || 'SoundCloud Set',
         artist: oembed.author_name || 'SoundCloud Artist',
         duration: 0,
         artworkUrl: oembed.thumbnail_url,
         permalinkUrl: targetUrl,
         downloadable: false,
         requiresProxy: true,
-        note: 'Metadaten geladen. Für Audio-Streams wird ein direkter MP3-Download benötigt.'
+        note: 'Metadaten geladen. Audio-Download durch SoundCloud-Verschlüsselung eingeschränkt.'
       };
     }
 
     return {
       platform: 'soundcloud',
-      title: 'SoundCloud Track',
+      title: 'SoundCloud Set',
       artist: 'Unbekannt',
       duration: 0,
       downloadable: false,
       requiresProxy: true,
-      error: 'SoundCloud Metadaten konnten nicht abgerufen werden.'
+      error: 'SoundCloud-Link konnte nicht aufgelöst werden. Bitte prüfe die URL.'
     };
   } catch (err: any) {
     console.error('Soundcloud resolve error:', err);
     return {
       platform: 'soundcloud',
-      title: 'SoundCloud Track',
+      title: 'SoundCloud Set',
       artist: 'Unbekannt',
       duration: 0,
       downloadable: false,
@@ -416,37 +541,52 @@ async function resolveDirectAudio(url: string): Promise<StreamMetadataResult> {
 }
 
 /**
- * Fetches popular trending live Techno sets from HearThis for 1-click test import
+ * Fetches popular trending live Techno sets from SoundCloud and HearThis for 1-click test import
  */
 export async function getPopularTechnoSets(): Promise<StreamMetadataResult[]> {
+  const popularList: StreamMetadataResult[] = [];
+
+  // 1. Try to fetch high-energy SoundCloud techno set
   try {
-    const res = await fetch('https://api-v2.hearthis.at/feed/?type=popular&category=techno&count=6', {
+    const scResolved = await resolveSoundcloud('https://soundcloud.com/ls41cologne/cabmix-002-i-ls41-i-hard');
+    if (scResolved && scResolved.downloadable) {
+      popularList.push(scResolved);
+    }
+  } catch (scErr) {
+    console.warn('Could not fetch default SoundCloud set for popular feed:', scErr);
+  }
+
+  // 2. Fetch HearThis trending sets
+  try {
+    const res = await fetch('https://api-v2.hearthis.at/feed/?type=popular&category=techno&count=5', {
       headers: { 'User-Agent': 'TechnoSetAnalyzer/2.0' }
     });
 
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-
-    return data
-      .filter((item: any) => item.stream_url || item.download_url)
-      .slice(0, 5)
-      .map((item: any) => ({
-        platform: 'hearthis' as const,
-        title: item.title || 'Techno Set',
-        artist: item.user?.username || 'DJ',
-        duration: parseInt(item.duration, 10) || 3600,
-        artworkUrl: item.artwork_url_retina || item.artwork_url || item.thumb,
-        streamUrl: item.stream_url || item.download_url,
-        permalinkUrl: item.permalink_url,
-        downloadable: true,
-        requiresProxy: true,
-        genre: item.genre || 'Techno',
-        description: item.description || ''
-      }));
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const htSets = data
+          .filter((item: any) => item.stream_url || item.download_url)
+          .slice(0, 4)
+          .map((item: any) => ({
+            platform: 'hearthis' as const,
+            title: item.title || 'Techno Set',
+            artist: item.user?.username || 'DJ',
+            duration: parseInt(item.duration, 10) || 3600,
+            artworkUrl: item.artwork_url_retina || item.artwork_url || item.thumb,
+            streamUrl: item.stream_url || item.download_url,
+            permalinkUrl: item.permalink_url,
+            downloadable: true,
+            requiresProxy: true,
+            genre: item.genre || 'Techno',
+            description: item.description || ''
+          }));
+        popularList.push(...htSets);
+      }
+    }
   } catch (err) {
-    console.error('Error fetching popular techno sets:', err);
-    return [];
+    console.error('Error fetching popular techno sets from HearThis:', err);
   }
+
+  return popularList;
 }

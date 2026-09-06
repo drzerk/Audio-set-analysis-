@@ -23,6 +23,8 @@ import { TechnoSetAnalysis, StreamMetadataResult, StreamingPlatform } from '../t
 import { analyzeTechnoAudioFile, downloadAndAnalyzeStream } from '../utils/audioAnalyzer';
 import { DEMO_SETS } from '../data/demoSets';
 import { formatTimeSeconds } from '../utils/pdfExport';
+import { saveLocalSet } from '../utils/storage';
+import { validateStreamingUrl, validateSoundCloudUrl } from '../utils/urlValidator';
 
 interface SetUploadModalProps {
   isOpen: boolean;
@@ -97,6 +99,15 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
         setProgressPercent(percent);
       });
 
+      // Update local IndexedDB storage BEFORE adding set to application state
+      setProgressText('Speichere Set in lokaler IndexedDB-Datenbank...');
+      setProgressPercent(98);
+      try {
+        await saveLocalSet(result);
+      } catch (dbErr) {
+        console.warn('IndexedDB write issue, persisted with dual-layer fallback', dbErr);
+      }
+
       onSetAnalyzed(result);
       setIsProcessing(false);
       onClose();
@@ -115,12 +126,24 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     }
   };
 
-  // URL Stream Resolution
+  // URL Stream Resolution (Inspect details)
   const handleResolveUrl = async (urlToResolve?: string) => {
     const targetUrl = (urlToResolve || streamUrlInput).trim();
     if (!targetUrl) {
       setError('Bitte gib einen gültigen Link von SoundCloud, HearThis, Mixcloud oder eine direkte MP3-URL ein.');
       return;
+    }
+
+    // 1. Strict URL format validation
+    const validation = validateStreamingUrl(targetUrl);
+    if (!validation.isValid) {
+      setError(validation.error || 'Ungültiges URL-Format. Bitte überprüfe die Webadresse.');
+      return;
+    }
+
+    // Auto-update input with normalized URL
+    if (validation.normalizedUrl && validation.normalizedUrl !== streamUrlInput) {
+      setStreamUrlInput(validation.normalizedUrl);
     }
 
     setError(null);
@@ -131,7 +154,7 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
       const res = await fetch('/api/stream/resolve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl })
+        body: JSON.stringify({ url: validation.normalizedUrl })
       });
 
       const data = await res.json();
@@ -150,19 +173,56 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     }
   };
 
-  // Start download & analysis for stream
-  const handleAnalyzeStream = async (meta: StreamMetadataResult) => {
-    if (!meta.streamUrl) {
-      setError('Für dieses Set ist kein direkter Audio-Stream verfügbar.');
+  // Direct Analyze URL (Validates URL format -> Resolves Stream -> Triggers Analysis -> Saves to IndexedDB -> Adds to State)
+  const handleDirectAnalyzeUrl = async (urlToAnalyze?: string) => {
+    const rawTarget = (urlToAnalyze || streamUrlInput).trim();
+    if (!rawTarget) {
+      setError('Bitte gib einen Link von SoundCloud, HearThis oder einen direkten Audio-Stream ein.');
       return;
+    }
+
+    // 1. Validate URL Format
+    const validation = validateStreamingUrl(rawTarget);
+    if (!validation.isValid) {
+      setError(validation.error || 'Ungültiges URL-Format. Bitte eine vollständige Track- oder Set-URL eingeben.');
+      return;
+    }
+
+    // Auto-update input with normalized URL
+    if (validation.normalizedUrl && validation.normalizedUrl !== streamUrlInput) {
+      setStreamUrlInput(validation.normalizedUrl);
     }
 
     setError(null);
     setIsProcessing(true);
     setProgressPercent(5);
-    setProgressText('Verbinde mit Stream-Proxy...');
+    setProgressText(
+      validation.platform === 'soundcloud'
+        ? 'Verbinde mit SoundCloud API & prüfe Stream...'
+        : 'Löse Audio-Stream & Metadaten auf...'
+    );
 
     try {
+      // 2. Resolve Stream URL and Metadata
+      const res = await fetch('/api/stream/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: validation.normalizedUrl })
+      });
+
+      const data = await res.json();
+      if (!data.success || !data.metadata) {
+        throw new Error(data.error || 'Audio-Stream konnte nicht aufgelöst werden.');
+      }
+
+      const meta: StreamMetadataResult = data.metadata;
+      if (!meta.streamUrl) {
+        throw new Error(meta.error || 'Für diesen Track ist kein direkter Audio-Stream verfügbar.');
+      }
+
+      setResolvedMetadata(meta);
+
+      // 3. Trigger Analysis Service
       const result = await downloadAndAnalyzeStream(
         meta.streamUrl,
         {
@@ -185,6 +245,72 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
         }
       );
 
+      // 4. Update local IndexedDB storage BEFORE adding set to application state
+      setProgressText('Speichere Set in lokaler IndexedDB-Datenbank...');
+      setProgressPercent(98);
+      try {
+        await saveLocalSet(result);
+      } catch (dbErr) {
+        console.warn('IndexedDB persistence completed with dual-layer fallback', dbErr);
+      }
+
+      // 5. Add set to application state
+      onSetAnalyzed(result);
+      setIsProcessing(false);
+      onClose();
+    } catch (err: any) {
+      console.error('Direct stream analysis failed:', err);
+      setError('Stream-Analyse fehlgeschlagen: ' + (err.message || 'Netzwerkfehler'));
+      setIsProcessing(false);
+    }
+  };
+
+  // Start download & analysis for stream (from preview card)
+  const handleAnalyzeStream = async (meta: StreamMetadataResult) => {
+    if (!meta.streamUrl) {
+      setError('Für dieses Set ist kein direkter Audio-Stream verfügbar.');
+      return;
+    }
+
+    setError(null);
+    setIsProcessing(true);
+    setProgressPercent(5);
+    setProgressText('Verbinde mit Stream-Proxy...');
+
+    try {
+      // 1. Trigger analysis service
+      const result = await downloadAndAnalyzeStream(
+        meta.streamUrl,
+        {
+          title: meta.title,
+          artist: meta.artist,
+          platform:
+            meta.platform === 'soundcloud'
+              ? 'soundcloud'
+              : meta.platform === 'hearthis'
+              ? 'hearthis'
+              : meta.platform === 'mixcloud'
+              ? 'mixcloud'
+              : 'direct-stream',
+          artworkUrl: meta.artworkUrl,
+          permalinkUrl: meta.permalinkUrl
+        },
+        (step, percent) => {
+          setProgressText(step);
+          setProgressPercent(percent);
+        }
+      );
+
+      // 2. Update local IndexedDB storage BEFORE adding the set to the application state
+      setProgressText('Speichere Set in lokaler IndexedDB-Datenbank...');
+      setProgressPercent(98);
+      try {
+        await saveLocalSet(result);
+      } catch (dbErr) {
+        console.warn('IndexedDB persistence completed with dual-layer fallback', dbErr);
+      }
+
+      // 3. Add set to application state
       onSetAnalyzed(result);
       setIsProcessing(false);
       onClose();
@@ -195,17 +321,13 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     }
   };
 
-  // Helper to detect platform from typed URL for badge display
-  const detectPlatformFromUrl = (url: string): StreamingPlatform => {
-    const l = url.toLowerCase();
-    if (l.includes('hearthis.at') || l.includes('hearthis.app')) return 'hearthis';
-    if (l.includes('soundcloud.com')) return 'soundcloud';
-    if (l.includes('mixcloud.com')) return 'mixcloud';
-    if (l.endsWith('.mp3') || l.endsWith('.wav') || l.endsWith('.flac') || l.includes('audio')) return 'direct';
-    return 'unknown';
-  };
+  // Real-time URL inspection for badges and validation hints
+  const urlValidationStatus = React.useMemo(() => {
+    if (!streamUrlInput.trim()) return null;
+    return validateStreamingUrl(streamUrlInput);
+  }, [streamUrlInput]);
 
-  const detectedPlatform = detectPlatformFromUrl(streamUrlInput);
+  const detectedPlatform: StreamingPlatform = urlValidationStatus?.platform || 'unknown';
 
   return (
     <div
@@ -347,72 +469,114 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
                       <span>Set-URL eingeben:</span>
                     </label>
 
-                    {/* Detected Platform Tag */}
-                    {detectedPlatform !== 'unknown' && (
+                    {/* Detected Platform & Validation Tag */}
+                    {urlValidationStatus && (
                       <span
-                        className={`text-[9px] font-mono px-2 py-0.5 rounded uppercase font-bold border ${
-                          detectedPlatform === 'hearthis'
-                            ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                            : detectedPlatform === 'soundcloud'
-                            ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
-                            : detectedPlatform === 'mixcloud'
-                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-300'
-                            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                        className={`text-[9px] font-mono px-2 py-0.5 rounded uppercase font-bold border transition-colors ${
+                          urlValidationStatus.isValid
+                            ? urlValidationStatus.platform === 'soundcloud'
+                              ? 'bg-orange-500/15 border-orange-500/40 text-orange-300'
+                              : urlValidationStatus.platform === 'hearthis'
+                              ? 'bg-teal-500/15 border-teal-500/40 text-teal-300'
+                              : urlValidationStatus.platform === 'mixcloud'
+                              ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                              : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                            : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                         }`}
                       >
-                        {detectedPlatform === 'hearthis'
-                          ? 'HearThis.at erkannt'
-                          : detectedPlatform === 'soundcloud'
-                          ? 'SoundCloud erkannt'
-                          : detectedPlatform === 'mixcloud'
+                        {urlValidationStatus.platform === 'soundcloud'
+                          ? urlValidationStatus.isValid
+                            ? '✓ SoundCloud Track verifiziert'
+                            : '⚠ SoundCloud (Track-Link erforderlich)'
+                          : urlValidationStatus.platform === 'hearthis'
+                          ? urlValidationStatus.isValid
+                            ? '✓ HearThis.at Track verifiziert'
+                            : '⚠ HearThis.at erkannt'
+                          : urlValidationStatus.platform === 'mixcloud'
                           ? 'Mixcloud erkannt'
-                          : 'Direkter Audio-Link'}
+                          : urlValidationStatus.platform === 'direct'
+                          ? '✓ Direkter Audio-Stream'
+                          : 'URL erkannt'}
                       </span>
                     )}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
                       <input
                         type="url"
-                        placeholder="https://hearthis.at/dj/... oder https://soundcloud.com/..."
+                        placeholder="https://soundcloud.com/... oder https://hearthis.at/..."
                         value={streamUrlInput}
-                        onChange={(e) => setStreamUrlInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleResolveUrl();
+                        onChange={(e) => {
+                          setStreamUrlInput(e.target.value);
+                          if (error) setError(null);
                         }}
-                        className="w-full bg-black/60 border border-white/15 focus:border-emerald-400 rounded-lg py-2.5 px-3 font-mono text-xs text-white placeholder:text-slate-600 outline-none transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleDirectAnalyzeUrl();
+                        }}
+                        className={`w-full bg-black/60 border rounded-lg py-2.5 px-3 font-mono text-xs text-white placeholder:text-slate-600 outline-none transition-colors ${
+                          error ? 'border-pink-500/80 focus:border-pink-400' : 'border-white/15 focus:border-emerald-400'
+                        }`}
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleResolveUrl()}
-                      disabled={isResolving || !streamUrlInput.trim()}
-                      className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-black font-mono text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-md shrink-0"
-                    >
-                      {isResolving ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Laden...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="w-3.5 h-3.5" />
-                          <span>Prüfen & Laden</span>
-                        </>
-                      )}
-                    </button>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Primary Action: Direct Analyze & Load */}
+                      <button
+                        type="button"
+                        onClick={() => handleDirectAnalyzeUrl()}
+                        disabled={isResolving || isProcessing || !streamUrlInput.trim()}
+                        className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-black font-mono text-xs font-bold px-3.5 py-2.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                        title="URL validieren, Audio-Stream laden, analysieren und in IndexedDB speichern"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-black" />
+                        <span>Set analysieren</span>
+                      </button>
+
+                      {/* Secondary Action: Inspect / Preview Metadata */}
+                      <button
+                        type="button"
+                        onClick={() => handleResolveUrl()}
+                        disabled={isResolving || isProcessing || !streamUrlInput.trim()}
+                        className="bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white font-mono text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer border border-white/10"
+                        title="Vorab Track-Details und Dauer prüfen"
+                      >
+                        {isResolving ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                        ) : (
+                          <Globe className="w-3.5 h-3.5 text-slate-300" />
+                        )}
+                        <span className="hidden sm:inline">Prüfen</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
-                    <span>Unterstützt:</span>
-                    <span className="text-teal-400 font-bold">HearThis.at</span>
-                    <span>•</span>
-                    <span className="text-orange-400 font-bold">SoundCloud</span>
-                    <span>•</span>
-                    <span className="text-blue-400 font-bold">Mixcloud</span>
-                    <span>•</span>
-                    <span className="text-emerald-400 font-bold">MP3 / WAV / Web-Stream</span>
+                  {/* Format Hint & One-Click Test Pill */}
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <span>Unterstützt:</span>
+                      <span className="text-orange-400 font-bold">SoundCloud</span>
+                      <span>•</span>
+                      <span className="text-teal-400 font-bold">HearThis.at</span>
+                      <span>•</span>
+                      <span className="text-blue-400 font-bold">Mixcloud</span>
+                      <span>•</span>
+                      <span className="text-emerald-400 font-bold">MP3 / WAV</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const testSoundCloud = 'https://soundcloud.com/ls41cologne/cabmix-002-i-ls41-i-hard';
+                        setStreamUrlInput(testSoundCloud);
+                        setError(null);
+                      }}
+                      className="text-orange-400/80 hover:text-orange-300 hover:underline flex items-center gap-1 transition-colors"
+                      title="SoundCloud Test-Set einfügen"
+                    >
+                      <span>SoundCloud-Beispiel einfügen</span>
+                      <ArrowRight className="w-2.5 h-2.5" />
+                    </button>
                   </div>
                 </div>
 

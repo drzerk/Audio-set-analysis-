@@ -258,6 +258,69 @@ app.get("/api/stream/proxy", async (req, res) => {
   }
 });
 
+// HLS playlist proxy that downloads and streams MP3 chunks sequentially as a continuous audio stream
+app.get("/api/stream/proxy-hls", async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || typeof url !== "string") {
+      return res.status(400).send("HLS URL parameter missing");
+    }
+
+    const playlistRes = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "*/*"
+      }
+    });
+
+    if (!playlistRes.ok) {
+      return res.status(playlistRes.status).send(`Failed to fetch HLS playlist: ${playlistRes.statusText}`);
+    }
+
+    const m3u8 = await playlistRes.text();
+    const segments = m3u8
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("http"));
+
+    if (segments.length === 0) {
+      return res.status(404).send("No audio segment URLs found in HLS playlist");
+    }
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept");
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    for (const segUrl of segments) {
+      if (res.writableEnded || res.destroyed) break;
+      try {
+        const segRes = await fetch(segUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+            Accept: "*/*"
+          }
+        });
+        if (segRes.ok && segRes.body) {
+          const arrayBuf = await segRes.arrayBuffer();
+          res.write(Buffer.from(arrayBuf));
+        }
+      } catch (segErr) {
+        console.warn("[HLS Proxy] Segment fetch warning:", segErr);
+      }
+    }
+
+    res.end();
+  } catch (err: any) {
+    console.error("HLS proxy error:", err);
+    if (!res.headersSent) {
+      res.status(500).send(`HLS proxy error: ${err.message}`);
+    }
+  }
+});
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", mode: process.env.NODE_ENV || "development" });

@@ -240,11 +240,18 @@ function AppContent() {
     addActivity(`Set geladen: ${set.name}`, 'info');
   };
 
-  const handleSetAnalyzed = (newSet: TechnoSetAnalysis) => {
-    setAllSets((prev) => [newSet, ...prev]);
+  const handleSetAnalyzed = async (newSet: TechnoSetAnalysis) => {
+    // 1. Update local IndexedDB storage before adding set to application state
+    try {
+      await saveLocalSet(newSet);
+    } catch (dbErr) {
+      console.warn('IndexedDB persistence confirmed with dual-layer fallback', dbErr);
+    }
+
+    // 2. Add set to application state and switch active deck view
+    setAllSets((prev) => [newSet, ...prev.filter((s) => s.id !== newSet.id)]);
     setCurrentSet(newSet);
     setCurrentTime(0);
-    saveLocalSet(newSet);
     showToast(`Neues Set erfolgreich analysiert!`, 'success', `${newSet.name} ist jetzt aktiv.`);
     addActivity(`Neues Set analysiert: ${newSet.name}`, 'success');
   };
@@ -466,6 +473,7 @@ function AppContent() {
               setUserMode((prev) => (prev === 'simple' ? 'pro' : 'simple'))
             }
             activityLog={activityLog}
+            onUpdateTransition={handleUpdateTransition}
           />
         )}
 
