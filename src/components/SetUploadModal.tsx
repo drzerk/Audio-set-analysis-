@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   UploadCloud,
   FileAudio,
@@ -57,7 +57,15 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load popular live techno sets from HearThis API on mount
+  // Real-time URL inspection for badges and validation hints (called unconditionally)
+  const urlValidationStatus = useMemo(() => {
+    if (!streamUrlInput.trim()) return null;
+    return validateStreamingUrl(streamUrlInput);
+  }, [streamUrlInput]);
+
+  const detectedPlatform: StreamingPlatform = urlValidationStatus?.platform || 'unknown';
+
+  // Load popular live techno sets from API on mount
   useEffect(() => {
     if (isOpen && popularSets.length === 0) {
       loadPopularSets();
@@ -69,17 +77,15 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     try {
       const res = await fetch('/api/stream/popular-techno');
       const data = await res.json();
-      if (data.success && Array.isArray(data.sets)) {
+      if (data.success && Array.isArray(data.sets) && data.sets.length > 0) {
         setPopularSets(data.sets);
       }
     } catch (err) {
-      console.error('Failed to load popular sets:', err);
+      console.warn('Failed to load popular sets from remote:', err);
     } finally {
       setIsLoadingPopular(false);
     }
   };
-
-  if (!isOpen) return null;
 
   // Local file processing
   const handleFile = async (file: File) => {
@@ -175,7 +181,7 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
 
   // Direct Analyze URL (Validates URL format -> Resolves Stream -> Triggers Analysis -> Saves to IndexedDB -> Adds to State)
   const handleDirectAnalyzeUrl = async (urlToAnalyze?: string) => {
-    const rawTarget = (urlToAnalyze || streamUrlInput).trim();
+    const rawTarget = (urlToAnalyze || streamUrlInput).trim().replace(/^[<"'\s]+|[>"'\s]+$/g, '');
     if (!rawTarget) {
       setError('Bitte gib einen Link von SoundCloud, HearThis oder einen direkten Audio-Stream ein.');
       return;
@@ -216,11 +222,19 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
       }
 
       const meta: StreamMetadataResult = data.metadata;
-      if (!meta.streamUrl) {
-        throw new Error(meta.error || 'Für diesen Track ist kein direkter Audio-Stream verfügbar.');
-      }
-
       setResolvedMetadata(meta);
+
+      if (!meta.streamUrl || !meta.downloadable) {
+        setIsProcessing(false);
+        if (meta.error) {
+          setError(meta.error);
+        } else if (meta.note) {
+          setError(meta.note);
+        } else {
+          setError('Für diesen Track ist kein direkter Audio-Stream verfügbar. Bitte wähle ein anderes Set oder lade eine Datei hoch.');
+        }
+        return;
+      }
 
       // 3. Trigger Analysis Service
       const result = await downloadAndAnalyzeStream(
@@ -321,13 +335,7 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
     }
   };
 
-  // Real-time URL inspection for badges and validation hints
-  const urlValidationStatus = React.useMemo(() => {
-    if (!streamUrlInput.trim()) return null;
-    return validateStreamingUrl(streamUrlInput);
-  }, [streamUrlInput]);
-
-  const detectedPlatform: StreamingPlatform = urlValidationStatus?.platform || 'unknown';
+  if (!isOpen) return null;
 
   return (
     <div
@@ -486,7 +494,7 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
                       >
                         {urlValidationStatus.platform === 'soundcloud'
                           ? urlValidationStatus.isValid
-                            ? '✓ SoundCloud Track verifiziert'
+                            ? urlValidationStatus.message || (urlValidationStatus.isShortLink ? '✓ SoundCloud Kurzlink verifiziert' : '✓ SoundCloud Track verifiziert')
                             : '⚠ SoundCloud (Track-Link erforderlich)'
                           : urlValidationStatus.platform === 'hearthis'
                           ? urlValidationStatus.isValid
@@ -551,32 +559,60 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Format Hint & One-Click Test Pill */}
-                  <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <span>Unterstützt:</span>
-                      <span className="text-orange-400 font-bold">SoundCloud</span>
+                  {/* Format Hint & One-Click Test Pills */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] font-mono text-slate-400">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-slate-500">Formate:</span>
+                      <span className="text-orange-400 font-semibold">SoundCloud</span>
                       <span>•</span>
-                      <span className="text-teal-400 font-bold">HearThis.at</span>
+                      <span className="text-teal-400 font-semibold">HearThis.at</span>
                       <span>•</span>
-                      <span className="text-blue-400 font-bold">Mixcloud</span>
+                      <span className="text-blue-400 font-semibold">Mixcloud</span>
                       <span>•</span>
-                      <span className="text-emerald-400 font-bold">MP3 / WAV</span>
+                      <span className="text-emerald-400 font-semibold">MP3 / WAV</span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const testSoundCloud = 'https://soundcloud.com/ls41cologne/cabmix-002-i-ls41-i-hard';
-                        setStreamUrlInput(testSoundCloud);
-                        setError(null);
-                      }}
-                      className="text-orange-400/80 hover:text-orange-300 hover:underline flex items-center gap-1 transition-colors"
-                      title="SoundCloud Test-Set einfügen"
-                    >
-                      <span>SoundCloud-Beispiel einfügen</span>
-                      <ArrowRight className="w-2.5 h-2.5" />
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-slate-500">Test-Sets:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testSoundCloud = 'https://soundcloud.com/ls41cologne/cabmix-002-i-ls41-i-hard';
+                          setStreamUrlInput(testSoundCloud);
+                          setError(null);
+                        }}
+                        className="text-orange-400/90 hover:text-orange-300 hover:underline transition-colors"
+                        title="SoundCloud Test-Set einfügen"
+                      >
+                        SoundCloud
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testHearThis = 'https://hearthis.at/torstenk/ls41-driving-techno-mix/';
+                          setStreamUrlInput(testHearThis);
+                          setError(null);
+                        }}
+                        className="text-teal-400/90 hover:text-teal-300 hover:underline transition-colors"
+                        title="HearThis.at Test-Set einfügen"
+                      >
+                        HearThis
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testMixcloud = 'https://www.mixcloud.com/spartaque/spartaque-codex-show-170/';
+                          setStreamUrlInput(testMixcloud);
+                          setError(null);
+                        }}
+                        className="text-blue-400/90 hover:text-blue-300 hover:underline transition-colors"
+                        title="Mixcloud Show einfügen"
+                      >
+                        Mixcloud
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -647,7 +683,32 @@ export const SetUploadModal: React.FC<SetUploadModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Note or Tracklist for Mixcloud */}
+                    {/* Tracklist preview if available (e.g. Mixcloud / Tracklist cue-points) */}
+                    {resolvedMetadata.tracklist && resolvedMetadata.tracklist.length > 0 && (
+                      <div className="bg-black/40 border border-white/10 rounded p-2.5 max-h-36 overflow-y-auto">
+                        <div className="text-[10px] font-mono font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                          <span>Erkannte Tracklist ({resolvedMetadata.tracklist.length} Tracks):</span>
+                          <span className="text-[9px] text-emerald-400">Cue-Points bereit</span>
+                        </div>
+                        <div className="space-y-1">
+                          {resolvedMetadata.tracklist.map((track, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[9px] font-mono text-slate-400 border-b border-white/5 pb-0.5 last:border-0">
+                              <span className="truncate pr-2">
+                                <span className="text-white font-semibold">{track.artist ? `${track.artist} - ` : ''}</span>
+                                {track.title}
+                              </span>
+                              {track.timestamp !== undefined && (
+                                <span className="text-slate-500 font-mono shrink-0">
+                                  {formatTimeSeconds(track.timestamp)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Note */}
                     {resolvedMetadata.note && (
                       <div className="text-[10px] font-mono text-slate-300 bg-white/5 p-2 rounded border border-white/5 flex items-start gap-2">
                         <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />

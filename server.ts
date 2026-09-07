@@ -279,6 +279,11 @@ app.get("/api/stream/proxy-hls", async (req, res) => {
     }
 
     const m3u8 = await playlistRes.text();
+
+    // Check for initialization segment (fMP4 / AAC EXT-X-MAP)
+    const mapMatch = m3u8.match(/#EXT-X-MAP:URI="([^"]+)"/);
+    const initMapUrl = mapMatch ? mapMatch[1] : null;
+
     const segments = m3u8
       .split("\n")
       .map((l) => l.trim())
@@ -288,27 +293,68 @@ app.get("/api/stream/proxy-hls", async (req, res) => {
       return res.status(404).send("No audio segment URLs found in HLS playlist");
     }
 
+    // Determine audio mime type: MP3 vs MP4/AAC
+    const isMp4 =
+      (initMapUrl && (initMapUrl.includes(".mp4") || initMapUrl.includes(".m4s"))) ||
+      segments.some((s) => s.includes(".m4s") || s.includes(".mp4"));
+    const contentType = isMp4 ? "audio/mp4" : "audio/mpeg";
+
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept");
-    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Transfer-Encoding", "chunked");
 
-    for (const segUrl of segments) {
-      if (res.writableEnded || res.destroyed) break;
+    // If init map exists (for fragmented MP4), send it first
+    if (initMapUrl) {
       try {
-        const segRes = await fetch(segUrl, {
+        const initRes = await fetch(initMapUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0",
             Accept: "*/*"
           }
         });
-        if (segRes.ok && segRes.body) {
-          const arrayBuf = await segRes.arrayBuffer();
-          res.write(Buffer.from(arrayBuf));
+        if (initRes.ok) {
+          const initBuf = await initRes.arrayBuffer();
+          res.write(Buffer.from(initBuf));
         }
-      } catch (segErr) {
-        console.warn("[HLS Proxy] Segment fetch warning:", segErr);
+      } catch (initErr) {
+        console.warn("[HLS Proxy] Init segment fetch warning:", initErr);
+      }
+    }
+
+    // Cap segments to maximum 75 chunks (~30 minutes of high-resolution audio)
+    // to prevent server timeouts while providing complete acoustic profile data
+    const maxSegmentsToFetch = Math.min(segments.length, 75);
+    const targetSegments = segments.slice(0, maxSegmentsToFetch);
+
+    // Fetch and stream segments in parallel chunks of 4 to maximize throughput
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < targetSegments.length; i += BATCH_SIZE) {
+      if (res.writableEnded || res.destroyed) break;
+      const batchUrls = targetSegments.slice(i, i + BATCH_SIZE);
+      const batchPromises = batchUrls.map(async (segUrl) => {
+        try {
+          const segRes = await fetch(segUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              Accept: "*/*"
+            }
+          });
+          if (segRes.ok) {
+            return await segRes.arrayBuffer();
+          }
+        } catch (segErr) {
+          console.warn("[HLS Proxy] Segment fetch warning:", segErr);
+        }
+        return null;
+      });
+
+      const batchBuffers = await Promise.all(batchPromises);
+      for (const buf of batchBuffers) {
+        if (buf && !res.writableEnded && !res.destroyed) {
+          res.write(Buffer.from(buf));
+        }
       }
     }
 
@@ -342,8 +388,11 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server läuft auf http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});

@@ -67,8 +67,29 @@ export async function analyzeTechnoAudioBuffer(
 ): Promise<TechnoSetAnalysis> {
   onProgress?.('Audiodaten decodieren...', 25);
 
-  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  const audioCtx = new AudioContextClass();
+  let audioBuffer: AudioBuffer;
+
+  try {
+    // Clone arrayBuffer because decodeAudioData detaches the underlying ArrayBuffer
+    const bufferToDecode = arrayBuffer.slice(0);
+    audioBuffer = await audioCtx.decodeAudioData(bufferToDecode);
+  } catch (err: any) {
+    console.warn('Vollständige Audio-Decodierung fehlgeschlagen, versuche segmentierte Decodierung:', err);
+    // If browser ran out of memory or encountered a trailing stream glitch on a large DJ mix, decode a safe leading chunk
+    if (arrayBuffer.byteLength > 15 * 1024 * 1024) {
+      try {
+        const safeSlice = arrayBuffer.slice(0, 15 * 1024 * 1024);
+        audioBuffer = await audioCtx.decodeAudioData(safeSlice);
+      } catch (innerErr) {
+        throw new Error(`Audiodatei konnte vom Browser nicht decodiert werden: ${err?.message || 'Format ungültig'}`);
+      }
+    } else {
+      throw new Error(`Audiodatei konnte vom Browser nicht decodiert werden: ${err?.message || 'Format ungültig'}`);
+    }
+  }
+
   const duration = audioBuffer.duration;
   const sampleRate = audioBuffer.sampleRate;
   const numChannels = audioBuffer.numberOfChannels;
@@ -78,6 +99,9 @@ export async function analyzeTechnoAudioBuffer(
   // Extract raw PCM channel data
   const channelDataLeft = audioBuffer.getChannelData(0);
   const channelDataRight = numChannels > 1 ? audioBuffer.getChannelData(1) : channelDataLeft;
+
+  // Release audio context hardware resources after PCM extraction
+  audioCtx.close().catch(() => {});
 
   // Windowed analysis: divide the set into ~100 to 200 time blocks
   const targetBlocks = Math.min(180, Math.max(60, Math.floor(duration / 10)));
@@ -441,8 +465,13 @@ export async function downloadAndAnalyzeStream(
       );
     } else {
       const mbLoaded = (receivedBytes / (1024 * 1024)).toFixed(1);
-      onProgress?.(`Lade Audio-Stream (${mbLoaded} MB empfangen)...`, 20);
+      const approxProgress = Math.min(42, Math.round(8 + (receivedBytes / (1024 * 1024)) * 1.5));
+      onProgress?.(`Lade Audio-Stream (${mbLoaded} MB empfangen)...`, approxProgress);
     }
+  }
+
+  if (receivedBytes === 0) {
+    throw new Error('Keine Audiodaten vom Stream empfangen. Bitte überprüfe die URL oder Internetverbindung.');
   }
 
   onProgress?.('Erstelle Audio-Buffer für Frequenzanalyse...', 45);
@@ -482,6 +511,8 @@ export async function downloadAndAnalyzeStream(
  */
 export class TechnoPreviewAudioEngine {
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private analyser: AnalyserNode | null = null;
   private isPlaying: boolean = false;
   private timerId: number | null = null;
   private bpm: number = 142;
@@ -500,18 +531,52 @@ export class TechnoPreviewAudioEngine {
     return this.eqCarveMode;
   }
 
-  public async start(bpm: number, startAtSeconds: number = 0) {
-    if (!this.ctx) {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  public getAudioContext(): AudioContext | null {
+    return this.ctx;
+  }
+
+  public getAnalyser(): AnalyserNode | null {
+    this.ensureContext();
+    return this.analyser;
+  }
+
+  public getByteFrequencyData(targetArray: Uint8Array): boolean {
+    if (!this.analyser) {
+      this.ensureContext();
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.analyser) {
+      this.analyser.getByteFrequencyData(targetArray);
+      return true;
+    }
+    return false;
+  }
+
+  private ensureContext() {
+    if (!this.ctx && typeof window !== 'undefined') {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        this.ctx = new AudioContextClass();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 512;
+        this.analyser.smoothingTimeConstant = 0.78;
+        this.masterGain.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+      }
+    }
+  }
+
+  public async start(bpm: number, startAtSeconds: number = 0) {
+    this.ensureContext();
+    if (this.ctx && this.ctx.state === 'suspended') {
       await this.ctx.resume();
     }
 
     this.bpm = bpm;
     this.offsetSeconds = startAtSeconds;
     this.isPlaying = true;
-    this.startTime = this.ctx.currentTime;
+    this.startTime = this.ctx ? this.ctx.currentTime : 0;
     this.currentStep = 0;
 
     this.scheduleNotes();
@@ -568,8 +633,9 @@ export class TechnoPreviewAudioEngine {
     gain.gain.setValueAtTime(0.8, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
 
+    const dest = this.masterGain || this.ctx.destination;
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(dest);
 
     osc.start(time);
     osc.stop(time + 0.38);
@@ -590,15 +656,30 @@ export class TechnoPreviewAudioEngine {
 
       clashOsc.connect(mudFilter);
       mudFilter.connect(clashGain);
-      clashGain.connect(this.ctx.destination);
+      clashGain.connect(dest);
 
       clashOsc.start(time);
       clashOsc.stop(time + 0.45);
+    } else if (this.eqCarveMode === 'carved') {
+      // Carved mode: Clean, punchy sub with 180Hz mud carved out and isolated sub definition
+      const subHarmonic = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subHarmonic.type = 'sine';
+      subHarmonic.frequency.setValueAtTime(84, time); // Clean octave definition, zero mud
+      subGain.gain.setValueAtTime(0.12, time);
+      subGain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+
+      subHarmonic.connect(subGain);
+      subGain.connect(dest);
+
+      subHarmonic.start(time);
+      subHarmonic.stop(time + 0.28);
     }
   }
 
   private triggerHiHat(time: number) {
     if (!this.ctx) return;
+    const dest = this.masterGain || this.ctx.destination;
     // White noise buffer for crisp 909 open hat
     const bufferSize = this.ctx.sampleRate * 0.15;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -620,7 +701,7 @@ export class TechnoPreviewAudioEngine {
 
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(dest);
 
     noise.start(time);
     noise.stop(time + 0.15);
@@ -628,6 +709,7 @@ export class TechnoPreviewAudioEngine {
 
   private triggerGhost(time: number) {
     if (!this.ctx) return;
+    const dest = this.masterGain || this.ctx.destination;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
@@ -638,7 +720,7 @@ export class TechnoPreviewAudioEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(dest);
 
     osc.start(time);
     osc.stop(time + 0.05);

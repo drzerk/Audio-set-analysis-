@@ -474,6 +474,7 @@ function AppContent() {
             }
             activityLog={activityLog}
             onUpdateTransition={handleUpdateTransition}
+            audioEngine={audioEngineRef.current}
           />
         )}
 

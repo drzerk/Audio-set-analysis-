@@ -14,13 +14,15 @@ import {
   Clock,
   Disc3,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Activity
 } from 'lucide-react';
 import { TechnoSetAnalysis, TransitionItem, PeakMoment } from '../types';
 import { formatTimeSeconds } from '../utils/pdfExport';
 import { TechnoPreviewAudioEngine } from '../utils/audioAnalyzer';
 import { computeAutoTaggedSegments } from '../utils/segmentAutoTagger';
 import { PhaseDeltaWaveformOverlay } from './PhaseDeltaWaveformOverlay';
+import { BassSpectrumOverlay } from './BassSpectrumOverlay';
 
 interface AudioDeckProps {
   currentSet: TechnoSetAnalysis;
@@ -30,6 +32,8 @@ interface AudioDeckProps {
   onSeek: (time: number) => void;
   onJumpToTransition: (t: TransitionItem) => void;
   onJumpToPeak: (p: PeakMoment) => void;
+  audioEngine?: TechnoPreviewAudioEngine | null;
+  onSelectTab?: (tab: any) => void;
 }
 
 export const AudioDeck: React.FC<AudioDeckProps> = ({
@@ -39,13 +43,16 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
   onTogglePlay,
   onSeek,
   onJumpToTransition,
-  onJumpToPeak
+  onJumpToPeak,
+  audioEngine,
+  onSelectTab
 }) => {
   const [pitchPercent, setPitchPercent] = useState<number>(0);
   const [isLoopingTransition, setIsLoopingTransition] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(0.8);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showPhaseDeltaOverlay, setShowPhaseDeltaOverlay] = useState<boolean>(true);
+  const [showBassSpectrumOverlay, setShowBassSpectrumOverlay] = useState<boolean>(false);
   const [selectedTransitionId, setSelectedTransitionId] = useState<string | null>(null);
 
   const duration = currentSet.duration || 3600;
@@ -80,7 +87,7 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
   return (
     <div
       id="techno-audio-deck"
-      className="bg-[#121214] border border-white/5 p-3 sm:p-4 rounded relative overflow-hidden flex flex-col gap-2"
+      className="bg-[#0d1017] border border-slate-800/90 p-4 sm:p-5 rounded-2xl shadow-xl relative overflow-hidden flex flex-col gap-3 transition-all"
     >
       {/* Top Deck Info Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -179,6 +186,24 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
               </span>
             </button>
           )}
+
+          {/* Real-Time Frequency Spectrum / Bass EQ-Mud Overlay Toggle Button */}
+          <button
+            id="btn-toggle-bass-spectrum-overlay"
+            onClick={() => setShowBassSpectrumOverlay((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer ${
+              showBassSpectrumOverlay
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
+                : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200'
+            }`}
+            title="Echtzeit-Frequenzspektrum & Bass/EQ-Mud Analyzer ein-/ausblenden"
+          >
+            <Activity className={`w-3 h-3 ${showBassSpectrumOverlay ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+            <span className="hidden sm:inline">BASS-SPEKTRUM</span>
+            <span className="text-[9px] px-1 py-0.2 rounded font-bold bg-amber-500/25 text-amber-400">
+              RTA
+            </span>
+          </button>
         </div>
       </div>
 
@@ -459,6 +484,22 @@ export const AudioDeck: React.FC<AudioDeckProps> = ({
           duration={duration}
           onSelectTransition={(t) => setSelectedTransitionId(t.id)}
           onSeek={onSeek}
+        />
+      )}
+
+      {/* Real-Time Frequency Spectrum Overlay (Bass & EQ-Mud Analysis) */}
+      {showBassSpectrumOverlay && (
+        <BassSpectrumOverlay
+          currentSet={currentSet}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          audioEngine={audioEngine}
+          targetTransition={targetTransition}
+          allTransitions={currentSet.transitions}
+          onSelectTransition={(t) => setSelectedTransitionId(t.id)}
+          onSeek={onSeek}
+          onClose={() => setShowBassSpectrumOverlay(false)}
+          onSelectTab={onSelectTab}
         />
       )}
 
