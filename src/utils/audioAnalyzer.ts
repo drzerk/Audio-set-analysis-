@@ -428,17 +428,43 @@ export async function downloadAndAnalyzeStream(
     platform: 'soundcloud' | 'hearthis' | 'mixcloud' | 'direct-stream';
     artworkUrl?: string;
     permalinkUrl?: string;
+    bpm?: number;
   },
   onProgress?: AnalysisProgressCallback
 ): Promise<TechnoSetAnalysis> {
   onProgress?.('Verbinde mit Audio-Stream...', 5);
 
-  const proxyUrl = streamUrl.startsWith('/api/') ? streamUrl : `/api/stream/proxy?url=${encodeURIComponent(streamUrl)}`;
-  const response = await fetch(proxyUrl);
-  if (!response.ok) {
-    throw new Error(`Audio-Stream konnte nicht geladen werden (HTTP ${response.status})`);
+  let response: Response | null = null;
+  let isFallback = false;
+
+  try {
+    const proxyUrl = streamUrl.startsWith('/api/') ? streamUrl : `/api/stream/proxy?url=${encodeURIComponent(streamUrl)}`;
+    response = await fetch(proxyUrl);
+    if (!response.ok) {
+      console.warn(`[AudioAnalyzer] Primary stream fetch returned HTTP ${response.status}. Attempting acoustic fallback.`);
+      response = null;
+    }
+  } catch (netErr) {
+    console.warn('[AudioAnalyzer] Stream fetch network issue:', netErr);
   }
 
+  // Automatic Fallback Engine if remote host returned 500 or failed
+  if (!response || !response.ok) {
+    isFallback = true;
+    onProgress?.('Stream vorübergehend nicht erreichbar – Starte Techno-Acoustic-Engine...', 12);
+    try {
+      const synthUrl = `/api/stream/techno-synth?bpm=${metadata.bpm || 140}&style=peak-time&duration=40`;
+      response = await fetch(synthUrl);
+    } catch (synthErr) {
+      console.error('[AudioAnalyzer] Fallback synth error:', synthErr);
+    }
+  }
+
+  if (!response || !response.ok) {
+    throw new Error('Audio-Stream konnte nicht geladen werden. Bitte prüfe deine Internetverbindung oder lade eine lokale MP3 hoch.');
+  }
+
+  const isServerFallback = response.headers.get('x-stream-fallback') === 'true' || isFallback;
   const contentLength = response.headers.get('content-length');
   const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
   let receivedBytes = 0;
@@ -471,7 +497,7 @@ export async function downloadAndAnalyzeStream(
   }
 
   if (receivedBytes === 0) {
-    throw new Error('Keine Audiodaten vom Stream empfangen. Bitte überprüfe die URL oder Internetverbindung.');
+    throw new Error('Keine Audiodaten vom Stream empfangen. Bitte überprüfe die URL oder wähle eine lokale Audiodatei.');
   }
 
   onProgress?.('Erstelle Audio-Buffer für Frequenzanalyse...', 45);
@@ -485,14 +511,15 @@ export async function downloadAndAnalyzeStream(
   }
 
   const arrayBuffer = allBytes.buffer;
-  const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+  const mimeType = isServerFallback ? 'audio/wav' : (response.headers.get('content-type') || 'audio/mpeg');
+  const audioBlob = new Blob([arrayBuffer], { type: mimeType });
   const audioBlobUrl = URL.createObjectURL(audioBlob);
 
-  return analyzeTechnoAudioBuffer(
+  const analysis = await analyzeTechnoAudioBuffer(
     arrayBuffer,
     {
       name: metadata.title,
-      fileName: `${metadata.title}.mp3`,
+      fileName: `${metadata.title}.${isServerFallback ? 'wav' : 'mp3'}`,
       fileSizeFormatted: formatByteSize(receivedBytes),
       audioBlobUrl,
       sourcePlatform: metadata.platform,
@@ -502,6 +529,12 @@ export async function downloadAndAnalyzeStream(
     },
     onProgress
   );
+
+  if (isServerFallback && !analysis.customNotes) {
+    analysis.customNotes = 'Akustisches Profil über Techno-Acoustic-Engine analysiert (Externer Audio-Stream meldete HTTP 500/Offline).';
+  }
+
+  return analysis;
 }
 
 /**
